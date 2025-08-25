@@ -1,0 +1,551 @@
+# PokerIQ Pro API Gateway Configuration
+# Kong Configuration for Microservices Integration
+# 支持100万+并发用户的企业级API网关
+
+_format_version: "3.0"
+_transform: true
+
+# ==========================================
+# 服务定义 - Services
+# ==========================================
+
+services:
+  # 主应用服务 (Next.js)
+  - name: main-app
+    url: http://app:3000
+    retries: 3
+    connect_timeout: 5000
+    write_timeout: 60000
+    read_timeout: 60000
+    tags:
+      - main-app
+      - frontend
+    
+  # AI训练服务 (Python FastAPI)
+  - name: ai-service
+    url: http://ai-service:8000
+    retries: 5
+    connect_timeout: 10000
+    write_timeout: 120000
+    read_timeout: 120000
+    tags:
+      - ai-service
+      - ml
+      - gto
+    
+  # WebSocket服务
+  - name: websocket-service
+    url: http://websocket:8850
+    retries: 2
+    connect_timeout: 3000
+    write_timeout: 30000
+    read_timeout: 30000
+    tags:
+      - websocket
+      - realtime
+    
+  # 数据分析服务 (ClickHouse)
+  - name: analytics-service
+    url: http://clickhouse:8123
+    retries: 3
+    connect_timeout: 5000
+    write_timeout: 30000
+    read_timeout: 30000
+    tags:
+      - analytics
+      - clickhouse
+
+# ==========================================
+# 路由定义 - Routes
+# ==========================================
+
+routes:
+  # 主应用路由
+  - name: main-app-routes
+    service: main-app
+    paths:
+      - /
+      - /api/auth
+      - /api/user
+      - /api/sessions
+      - /api/achievements
+      - /api/companions
+      - /api/leaderboard
+      - /api/payment
+      - /api/health
+    methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+    strip_path: false
+    preserve_host: true
+    tags:
+      - main-app
+    
+  # AI服务路由
+  - name: ai-gto-routes
+    service: ai-service
+    paths:
+      - /api/gto
+      - /api/ai
+    methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+    strip_path: false
+    preserve_host: true
+    tags:
+      - ai-service
+    
+  # WebSocket路由
+  - name: websocket-routes
+    service: websocket-service
+    paths:
+      - /socket.io
+      - /ws
+    methods:
+      - GET
+      - POST
+    strip_path: false
+    preserve_host: true
+    tags:
+      - websocket
+    
+  # 数据分析路由
+  - name: analytics-routes
+    service: analytics-service
+    paths:
+      - /api/analytics
+    methods:
+      - GET
+      - POST
+    strip_path: true
+    preserve_host: true
+    tags:
+      - analytics
+
+# ==========================================
+# 插件配置 - Plugins
+# ==========================================
+
+plugins:
+  # 全局限流
+  - name: rate-limiting
+    config:
+      minute: 1000
+      hour: 50000
+      day: 1000000
+      policy: redis
+      redis_host: redis-primary
+      redis_port: 6379
+      redis_password: ${REDIS_PASSWORD}
+      redis_database: 1
+      fault_tolerant: true
+    tags:
+      - rate-limiting
+      - global
+  
+  # 全局请求转换
+  - name: request-transformer
+    config:
+      add:
+        headers:
+          - "X-Gateway: kong"
+          - "X-Request-Time: $(date +%s)"
+        querystring: []
+      remove:
+        headers: []
+        querystring: []
+      replace:
+        headers: []
+        querystring: []
+    tags:
+      - request-transformer
+      - global
+  
+  # 全局响应转换
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "X-Response-Time: $(date +%s)"
+          - "X-Powered-By: PokerIQ-Pro"
+        json: []
+      remove:
+        headers:
+          - "X-Powered-By"
+        json: []
+      replace:
+        headers: []
+        json: []
+    tags:
+      - response-transformer
+      - global
+  
+  # CORS支持
+  - name: cors
+    config:
+      origins:
+        - http://localhost:3000
+        - http://localhost:3001
+        - https://pokeriq-pro.com
+        - https://app.pokeriq-pro.com
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - X-Auth-Token
+        - X-Request-ID
+        - Authorization
+      exposed_headers:
+        - X-Auth-Token
+        - X-Request-ID
+      credentials: true
+      max_age: 3600
+    tags:
+      - cors
+      - global
+  
+  # Prometheus监控
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+    tags:
+      - monitoring
+      - prometheus
+  
+  # 日志记录
+  - name: http-log
+    config:
+      http_endpoint: http://loki:3100/loki/api/v1/push
+      method: POST
+      timeout: 10000
+      keepalive: 60000
+      retry_count: 10
+      queue_size: 100
+      flush_timeout: 5
+    tags:
+      - logging
+      - loki
+
+# ==========================================
+# 服务特定插件配置
+# ==========================================
+
+# AI服务专用插件
+- service: ai-service
+  plugins:
+    # AI服务限流（更严格）
+    - name: rate-limiting
+      config:
+        minute: 200
+        hour: 10000
+        day: 100000
+        policy: redis
+        redis_host: redis-primary
+        redis_port: 6379
+        redis_password: ${REDIS_PASSWORD}
+        redis_database: 2
+      tags:
+        - ai-service
+        - rate-limiting
+    
+    # 请求大小限制
+    - name: request-size-limiting
+      config:
+        allowed_payload_size: 10  # 10MB
+      tags:
+        - ai-service
+        - size-limiting
+    
+    # 超时配置
+    - name: request-timeout
+      config:
+        timeout: 120000  # 2分钟
+      tags:
+        - ai-service
+        - timeout
+
+# WebSocket服务专用插件
+- service: websocket-service
+  plugins:
+    # WebSocket限流
+    - name: rate-limiting
+      config:
+        minute: 500
+        hour: 20000
+        day: 200000
+        policy: redis
+        redis_host: redis-primary
+        redis_port: 6379
+        redis_password: ${REDIS_PASSWORD}
+        redis_database: 3
+      tags:
+        - websocket
+        - rate-limiting
+
+# 主应用服务专用插件
+- service: main-app
+  plugins:
+    # 缓存配置
+    - name: proxy-cache
+      config:
+        request_method:
+          - GET
+        response_code:
+          - 200
+          - 301
+          - 404
+        content_type:
+          - text/plain
+          - application/json
+        cache_ttl: 300  # 5分钟
+        strategy: memory
+      tags:
+        - main-app
+        - caching
+
+# ==========================================
+# 消费者配置 - Consumers
+# ==========================================
+
+consumers:
+  # 内部服务消费者
+  - username: internal-services
+    custom_id: internal
+    tags:
+      - internal
+      - services
+  
+  # 移动应用消费者
+  - username: mobile-app
+    custom_id: mobile
+    tags:
+      - mobile
+      - app
+  
+  # Web应用消费者
+  - username: web-app
+    custom_id: web
+    tags:
+      - web
+      - app
+
+# 为消费者配置认证
+- consumer: internal-services
+  plugins:
+    - name: key-auth
+      config:
+        key_names:
+          - apikey
+        key_in_body: false
+        key_in_header: true
+        key_in_query: true
+        hide_credentials: true
+    - name: hmac-auth
+      config:
+        hide_credentials: true
+        clock_skew: 300
+        validate_request_body: true
+        enforce_headers:
+          - date
+          - request-line
+        algorithms:
+          - hmac-sha256
+
+# API密钥配置
+keyauth_credentials:
+  - consumer: internal-services
+    key: ${INTERNAL_API_KEY}
+  - consumer: mobile-app
+    key: ${MOBILE_API_KEY}
+  - consumer: web-app
+    key: ${WEB_API_KEY}
+
+# ==========================================
+# 上游配置 - Upstreams
+# ==========================================
+
+upstreams:
+  # 主应用负载均衡
+  - name: main-app-upstream
+    algorithm: round-robin
+    hash_on: none
+    hash_fallback: none
+    hash_on_cookie_path: /
+    slots: 10000
+    healthchecks:
+      active:
+        timeout: 1
+        concurrency: 10
+        http_path: /api/health
+        healthy:
+          interval: 5
+          http_statuses:
+            - 200
+          successes: 3
+        unhealthy:
+          interval: 3
+          http_statuses:
+            - 429
+            - 500
+            - 502
+            - 503
+            - 504
+          tcp_failures: 3
+          timeouts: 3
+          http_failures: 5
+      passive:
+        healthy:
+          http_statuses:
+            - 200
+            - 201
+            - 202
+            - 203
+            - 204
+            - 205
+            - 206
+            - 300
+            - 301
+            - 302
+            - 303
+            - 304
+            - 307
+            - 308
+          successes: 5
+        unhealthy:
+          http_statuses:
+            - 429
+            - 500
+            - 502
+            - 503
+            - 504
+          tcp_failures: 2
+          timeouts: 7
+          http_failures: 5
+    tags:
+      - main-app
+      - upstream
+
+  # AI服务负载均衡
+  - name: ai-service-upstream
+    algorithm: least-connections
+    hash_on: none
+    hash_fallback: none
+    slots: 10000
+    healthchecks:
+      active:
+        timeout: 5
+        concurrency: 5
+        http_path: /health
+        healthy:
+          interval: 10
+          http_statuses:
+            - 200
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_statuses:
+            - 500
+            - 502
+            - 503
+            - 504
+          tcp_failures: 2
+          timeouts: 3
+          http_failures: 3
+    tags:
+      - ai-service
+      - upstream
+
+# 目标配置
+targets:
+  # 主应用实例
+  - target: app:3000
+    upstream: main-app-upstream
+    weight: 100
+    tags:
+      - main-app
+      - instance-1
+  
+  # AI服务实例
+  - target: ai-service:8000
+    upstream: ai-service-upstream
+    weight: 100
+    tags:
+      - ai-service
+      - instance-1
+
+# ==========================================
+# 证书配置 - Certificates
+# ==========================================
+
+certificates:
+  - cert: |
+      -----BEGIN CERTIFICATE-----
+      # SSL证书内容
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN PRIVATE KEY-----
+      # 私钥内容
+      -----END PRIVATE KEY-----
+    tags:
+      - ssl
+      - production
+
+# ==========================================
+# SNI配置
+# ==========================================
+
+snis:
+  - name: pokeriq-pro.com
+    certificate: certificates[0]
+    tags:
+      - ssl
+      - production
+  - name: app.pokeriq-pro.com
+    certificate: certificates[0]
+    tags:
+      - ssl
+      - production
+
+# ==========================================
+# 全局配置
+# ==========================================
+
+_global:
+  # 性能优化
+  nginx_worker_processes: auto
+  nginx_worker_connections: 16384
+  
+  # 内存配置
+  mem_cache_size: 128m
+  
+  # 日志配置
+  error_log: /dev/stderr warn
+  access_log: /dev/stdout
+  
+  # 安全配置
+  nginx_http_client_max_body_size: 10m
+  nginx_http_client_body_buffer_size: 128k
+  
+  # 连接配置
+  upstream_keepalive: 60
+  upstream_keepalive_requests: 10000
+  upstream_keepalive_timeout: 60s

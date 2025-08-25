@@ -1,0 +1,294 @@
+# PokerIQ Pro 告警规则配置
+# 支持100万+并发用户的高性能告警系统
+
+groups:
+  # API性能告警
+  - name: api_performance
+    rules:
+      # API响应时间告警
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(pokeriq_http_request_duration_seconds_bucket[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API响应时间过高"
+          description: "API 95分位响应时间 {{ $value }}s 超过100ms阈值"
+
+      - alert: CriticalAPIResponseTime
+        expr: histogram_quantile(0.95, rate(pokeriq_http_request_duration_seconds_bucket[5m])) > 0.2
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API响应时间严重过高"
+          description: "API 95分位响应时间 {{ $value }}s 超过200ms严重阈值"
+
+      # API错误率告警
+      - alert: HighAPIErrorRate
+        expr: (rate(pokeriq_http_requests_total{status_code=~"5.."}[5m]) / rate(pokeriq_http_requests_total[5m])) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API错误率过高"
+          description: "API错误率 {{ $value }}% 超过5%阈值"
+
+      - alert: CriticalAPIErrorRate
+        expr: (rate(pokeriq_http_requests_total{status_code=~"5.."}[5m]) / rate(pokeriq_http_requests_total[5m])) * 100 > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API错误率严重过高"
+          description: "API错误率 {{ $value }}% 超过10%严重阈值"
+
+  # 数据库性能告警
+  - name: database_performance
+    rules:
+      # 数据库查询时间告警
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(pokeriq_db_query_duration_seconds_bucket[5m])) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "数据库查询缓慢"
+          description: "数据库查询95分位时间 {{ $value }}s 超过50ms阈值"
+
+      # 数据库连接数告警
+      - alert: HighDatabaseConnections
+        expr: pokeriq_db_connections_active > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "数据库连接数过高"
+          description: "活跃数据库连接数 {{ $value }} 超过80个"
+
+      - alert: CriticalDatabaseConnections
+        expr: pokeriq_db_connections_active > 95
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "数据库连接数严重过高"
+          description: "活跃数据库连接数 {{ $value }} 超过95个严重阈值"
+
+  # 缓存性能告警
+  - name: cache_performance
+    rules:
+      # 缓存命中率告警
+      - alert: LowCacheHitRate
+        expr: (rate(pokeriq_cache_hits_total[5m]) / (rate(pokeriq_cache_hits_total[5m]) + rate(pokeriq_cache_misses_total[5m]))) * 100 < 80
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "缓存命中率低"
+          description: "缓存命中率 {{ $value }}% 低于80%阈值"
+
+      - alert: CriticalCacheHitRate
+        expr: (rate(pokeriq_cache_hits_total[5m]) / (rate(pokeriq_cache_hits_total[5m]) + rate(pokeriq_cache_misses_total[5m]))) * 100 < 60
+        for: 3m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "缓存命中率严重过低"
+          description: "缓存命中率 {{ $value }}% 低于60%严重阈值"
+
+      # Redis操作时间告警
+      - alert: SlowCacheOperations
+        expr: histogram_quantile(0.95, rate(pokeriq_cache_operation_duration_seconds_bucket[5m])) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Redis操作缓慢"
+          description: "Redis操作95分位时间 {{ $value }}s 超过10ms阈值"
+
+  # 用户和并发告警
+  - name: user_concurrency
+    rules:
+      # 高并发用户告警
+      - alert: HighConcurrentUsers
+        expr: pokeriq_active_users{user_type="total"} > 800000
+        for: 2m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "并发用户数接近上限"
+          description: "当前并发用户数 {{ $value }} 超过80万，接近100万目标上限"
+
+      - alert: CriticalConcurrentUsers
+        expr: pokeriq_active_users{user_type="total"} > 950000
+        for: 1m
+        labels:
+          severity: critical
+          service: application
+        annotations:
+          summary: "并发用户数严重过高"
+          description: "当前并发用户数 {{ $value }} 超过95万，接近系统极限"
+
+      # WebSocket连接告警
+      - alert: HighWebSocketConnections
+        expr: pokeriq_websocket_connections_active > 500000
+        for: 2m
+        labels:
+          severity: warning
+          service: websocket
+        annotations:
+          summary: "WebSocket连接数过高"
+          description: "当前WebSocket连接数 {{ $value }} 超过50万"
+
+  # AI引擎性能告警
+  - name: ai_performance
+    rules:
+      # AI决策时间告警
+      - alert: SlowAIDecisions
+        expr: histogram_quantile(0.95, rate(pokeriq_ai_decision_duration_seconds_bucket[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "AI决策时间过长"
+          description: "AI决策95分位时间 {{ $value }}s 超过500ms阈值"
+
+      - alert: CriticalAIDecisions
+        expr: histogram_quantile(0.95, rate(pokeriq_ai_decision_duration_seconds_bucket[5m])) > 1.0
+        for: 1m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: "AI决策时间严重过长"
+          description: "AI决策95分位时间 {{ $value }}s 超过1000ms严重阈值"
+
+      # AI服务错误率告警
+      - alert: HighAIErrorRate
+        expr: (rate(pokeriq_ai_requests_total{status="error"}[5m]) / rate(pokeriq_ai_requests_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "AI服务错误率过高"
+          description: "AI服务错误率 {{ $value }}% 超过5%阈值"
+
+  # 系统资源告警
+  - name: system_resources
+    rules:
+      # CPU使用率告警
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "CPU使用率过高"
+          description: "实例 {{ $labels.instance }} CPU使用率 {{ $value }}% 超过80%"
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 1m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "CPU使用率严重过高"
+          description: "实例 {{ $labels.instance }} CPU使用率 {{ $value }}% 超过90%"
+
+      # 内存使用率告警
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "内存使用率过高"
+          description: "实例 {{ $labels.instance }} 内存使用率 {{ $value }}% 超过80%"
+
+      # 磁盘空间告警
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "磁盘空间不足"
+          description: "实例 {{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 使用率 {{ $value }}% 超过85%"
+
+      - alert: CriticalDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 95
+        for: 1m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "磁盘空间严重不足"
+          description: "实例 {{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 使用率 {{ $value }}% 超过95%"
+
+  # 业务指标告警
+  - name: business_metrics
+    rules:
+      # 游戏会话异常告警
+      - alert: HighGameSessionFailureRate
+        expr: (rate(pokeriq_game_session_duration_seconds_count{completion_status="abandoned"}[5m]) / rate(pokeriq_game_session_duration_seconds_count[5m])) * 100 > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: game
+        annotations:
+          summary: "游戏会话失败率过高"
+          description: "游戏会话失败率 {{ $value }}% 超过20%阈值"
+
+      # 支付失败率告警
+      - alert: HighPaymentFailureRate
+        expr: (rate(pokeriq_payment_requests_total{status!="success"}[10m]) / rate(pokeriq_payment_requests_total[10m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: payment
+        annotations:
+          summary: "支付失败率过高"
+          description: "支付失败率 {{ $value }}% 超过5%阈值"
+
+  # 服务可用性告警
+  - name: service_availability
+    rules:
+      # 服务下线告警
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: availability
+        annotations:
+          summary: "服务不可用"
+          description: "服务 {{ $labels.job }} 实例 {{ $labels.instance }} 已下线"
+
+      # 服务不稳定告警
+      - alert: ServiceFlapping
+        expr: changes(up[10m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+          service: availability
+        annotations:
+          summary: "服务状态不稳定"
+          description: "服务 {{ $labels.job }} 实例 {{ $labels.instance }} 在10分钟内状态变化超过3次"

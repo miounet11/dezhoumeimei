@@ -1,0 +1,246 @@
+
+> pokeriq-pro@1.0.4 dev:test
+> next dev -p 8821
+
+   ▲ Next.js 15.4.6
+   - Local:        http://localhost:8821
+   - Network:      http://192.168.66.82:8821
+   - Environments: .env.local, .env
+   - Experiments (use with caution):
+     · staleTimes
+     · serverActions
+     · isrMemoryCacheSize: 52428800
+     · ...
+
+ ✓ Starting...
+ ⚠ Invalid next.config.js options detected: 
+ ⚠     Unrecognized key(s) in object: 'isrMemoryCacheSize', 'serverComponentsExternalPackages' at "experimental"
+ ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+ ⚠ The config property `experimental.turbo` is deprecated. Move this setting to `config.turbopack` as Turbopack is now stable.
+ ⚠ `experimental.serverComponentsExternalPackages` has been moved to `serverExternalPackages`. Please update your next.config.js file accordingly.
+ ✓ Ready in 2.4s
+ ○ Compiling /ai-training ...
+ ✓ Compiled /ai-training in 4.4s (5231 modules)
+ GET /ai-training 200 in 4821ms
+ ○ Compiling /companion-center ...
+ ✓ Compiled /companion-center in 1262ms (5580 modules)
+ GET /companion-center 200 in 1728ms
+ ⚠ Found a change in next.config.js. Restarting the server to apply the changes...
+   ▲ Next.js 15.4.6
+   - Local:        http://localhost:8821
+   - Network:      http://192.168.66.82:8821
+   - Environments: .env.local, .env
+   - Experiments (use with caution):
+     · staleTimes
+     · serverActions
+     · optimizePackageImports
+     · ...
+
+ ✓ Starting...
+ ✓ Ready in 2.4s
+ ○ Compiling /companion-center ...
+ ✓ Compiled /companion-center in 10.3s (5544 modules)
+ GET /companion-center 200 in 10814ms
+ ○ Compiling /ai-training ...
+ ✓ Compiled /ai-training in 1101ms (5594 modules)
+ GET /ai-training 200 in 1489ms
+ ✓ Compiled in 135ms (2684 modules)
+ ✓ Compiled in 571ms (2698 modules)
+ ✓ Compiled in 795ms (2698 modules)
+ ✓ Compiled in 526ms (2698 modules)
+ ✓ Compiled /api/companions in 482ms (2831 modules)
+ GET /api/companions 200 in 609ms
+ ✓ Compiled /api/companions/interact in 186ms (2833 modules)
+开始互动: {
+  userId: 'test-user',
+  companionId: 'vivian',
+  interactionType: 'chat',
+  context: 'tavern'
+}
+prisma:query SELECT "public"."user_companions"."id", "public"."user_companions"."userId", "public"."user_companions"."companionId", "public"."user_companions"."relationshipLevel", "public"."user_companions"."intimacyPoints", "public"."user_companions"."totalInteractions", "public"."user_companions"."lastInteraction", "public"."user_companions"."currentOutfitId", "public"."user_companions"."currentMood", "public"."user_companions"."unlockedOutfits", "public"."user_companions"."unlockedVoices", "public"."user_companions"."customSettings", "public"."user_companions"."isActive", "public"."user_companions"."isPrimary", "public"."user_companions"."createdAt", "public"."user_companions"."updatedAt" FROM "public"."user_companions" WHERE (("public"."user_companions"."userId" = $1 AND "public"."user_companions"."companionId" = $2) AND 1=1) LIMIT $3 OFFSET $4
+prisma:error 
+Invalid `prisma.userCompanion.findUnique()` invocation:
+
+
+Inconsistent column data: Error creating UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `t` at 1
+数据库连接错误: Error [PrismaClientKnownRequestError]: 
+Invalid `prisma.userCompanion.findUnique()` invocation:
+
+
+Inconsistent column data: Error creating UUID, invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `t` at 1
+    at async POST (app/api/companions/interact/route.ts:27:28)
+  25 |     try {
+  26 |       // 获取用户与陪伴的关系
+> 27 |       const userCompanion = await prisma.userCompanion.findUnique({
+     |                            ^
+  28 |         where: {
+  29 |           userId_companionId: {
+  30 |             userId, {
+  code: 'P2023',
+  meta: [Object],
+  clientVersion: '6.13.0'
+}
+ POST /api/companions/interact 200 in 380ms
+ ✓ Compiled in 831ms (2698 modules)
+ ✓ Compiled in 763ms (2698 modules)
+ ✓ Compiled in 120ms (2684 modules)
+ ✓ Compiled in 512ms (2698 modules)
+ ✓ Compiled in 116ms (2684 modules)
+ ✓ Compiled in 507ms (2698 modules)
+ ✓ Compiled in 107ms (2684 modules)
+ ✓ Compiled in 521ms (2698 modules)
+ ✓ Compiled in 106ms (2684 modules)
+ ✓ Compiled in 772ms (2698 modules)
+ ✓ Compiled in 125ms (2684 modules)
+ ✓ Compiled in 111ms (2684 modules)
+ ✓ Compiled in 106ms (2684 modules)
+ ✓ Compiled in 110ms (2684 modules)
+ ✓ Compiled in 1258ms (2698 modules)
+ ✓ Compiled in 115ms (2684 modules)
+ ✓ Compiled in 560ms (2698 modules)
+ ○ Compiling /api/companions/interact ...
+ ✓ Compiled /api/companions/interact in 603ms (146 modules)
+开始互动: {
+  userId: 'test-user',
+  companionId: 'vivian',
+  interactionType: 'chat',
+  context: 'tavern'
+}
+非UUID格式，进入演示模式: { userId: 'invalid', companionId: 'invalid' }
+ POST /api/companions/interact 200 in 665ms
+开始互动: {
+  userId: 'test-user',
+  companionId: 'vivian',
+  interactionType: 'pool_hall',
+  context: 'pool_hall'
+}
+非UUID格式，进入演示模式: { userId: 'invalid', companionId: 'invalid' }
+ POST /api/companions/interact 200 in 9ms
+开始互动: {
+  userId: '123e4567-e89b-12d3-a456-426614174000',
+  companionId: '123e4567-e89b-12d3-a456-426614174001',
+  interactionType: 'voice',
+  context: 'private_room'
+}
+prisma:query SELECT "public"."user_companions"."id", "public"."user_companions"."userId", "public"."user_companions"."companionId", "public"."user_companions"."relationshipLevel", "public"."user_companions"."intimacyPoints", "public"."user_companions"."totalInteractions", "public"."user_companions"."lastInteraction", "public"."user_companions"."currentOutfitId", "public"."user_companions"."currentMood", "public"."user_companions"."unlockedOutfits", "public"."user_companions"."unlockedVoices", "public"."user_companions"."customSettings", "public"."user_companions"."isActive", "public"."user_companions"."isPrimary", "public"."user_companions"."createdAt", "public"."user_companions"."updatedAt" FROM "public"."user_companions" WHERE (("public"."user_companions"."userId" = $1 AND "public"."user_companions"."companionId" = $2) AND 1=1) LIMIT $3 OFFSET $4
+ POST /api/companions/interact 403 in 26ms
+ ✓ Compiled in 852ms (2698 modules)
+ ✓ Compiled in 111ms (2684 modules)
+ ✓ Compiled in 616ms (2698 modules)
+ ✓ Compiled in 130ms (2684 modules)
+ ✓ Compiled in 96ms (2684 modules)
+ ✓ Compiled in 110ms (2684 modules)
+ ✓ Compiled in 723ms (2698 modules)
+ ✓ Compiled in 124ms (2684 modules)
+ ✓ Compiled in 559ms (2698 modules)
+ ✓ Compiled in 494ms (2698 modules)
+ ✓ Compiled in 633ms (2698 modules)
+ ✓ Compiled in 113ms (2684 modules)
+ ✓ Compiled in 96ms (2684 modules)
+ ✓ Compiled in 579ms (2698 modules)
+ ✓ Compiled in 111ms (2684 modules)
+ ✓ Compiled in 502ms (2698 modules)
+ ✓ Compiled in 521ms (2698 modules)
+ ✓ Compiled in 599ms (2698 modules)
+ ✓ Compiled in 109ms (2684 modules)
+ ✓ Compiled in 99ms (2684 modules)
+ ✓ Compiled in 659ms (2698 modules)
+ ✓ Compiled in 111ms (2684 modules)
+ ✓ Compiled in 106ms (2684 modules)
+ ✓ Compiled in 90ms (2684 modules)
+ ✓ Compiled in 537ms (2698 modules)
+ ✓ Compiled in 107ms (2684 modules)
+ ✓ Compiled in 509ms (2698 modules)
+ ✓ Compiled in 103ms (2684 modules)
+ ○ Compiling /api/companions/interact ...
+ ✓ Compiled /api/companions/interact in 750ms (195 modules)
+开始互动: {
+  userId: '123e4567-e89b-12d3-a456-426614174000',
+  companionId: '123e4567-e89b-12d3-a456-426614174001',
+  interactionType: 'voice',
+  context: 'private_room'
+}
+[Error: Cannot find module '/Users/lu/Documents/dezhoulaoda/pokeriq-pro/.next/server/vendor-chunks/lib/worker.js'] {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+ ⨯ uncaughtException: [Error: Cannot find module '/Users/lu/Documents/dezhoulaoda/pokeriq-pro/.next/server/vendor-chunks/lib/worker.js'] {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+ ⨯ uncaughtException:  [Error: Cannot find module '/Users/lu/Documents/dezhoulaoda/pokeriq-pro/.next/server/vendor-chunks/lib/worker.js'] {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+[Error: the worker thread exited]
+ ⨯ uncaughtException: [Error: the worker thread exited]
+ ⨯ uncaughtException:  [Error: the worker thread exited]
+ POST /api/companions/interact 403 in 887ms
+开始互动: {
+  userId: 'test-user',
+  companionId: 'vivian',
+  interactionType: 'voice',
+  context: 'private_room'
+}
+非UUID格式，进入演示模式: { userId: 'invalid', companionId: 'invalid' }
+ POST /api/companions/interact 200 in 7ms
+prisma:error Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to administrator command", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("postgres.c"), line: Some(3211), routine: Some("ProcessInterrupts") }) }
+❌ Prisma 数据库错误: {
+  timestamp: 2025-08-25T14:06:33.666Z,
+  message: 'Error in PostgreSQL connection: Error { kind: Db, cause: Some(DbError { severity: "FATAL", parsed_severity: Some(Fatal), code: SqlState(E57P01), message: "terminating connection due to administrator command", detail: None, hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("postgres.c"), line: Some(3211), routine: Some("ProcessInterrupts") }) }',
+  target: 'quaint::connector::postgres::native'
+}
+Error: the worker has exited
+    at EventEmitter.eval (lib/db/prisma.ts:161:13)
+  159 |     client.$on('error', (e) => {
+  160 |       this.connectionStats.errors++;
+> 161 |       logger.error(`Database error on ${type}`, { error: e });
+      |             ^
+  162 |     });
+  163 |   }
+  164 |
+ ⨯ uncaughtException: Error: the worker has exited
+    at EventEmitter.eval (lib/db/prisma.ts:161:13)
+  159 |     client.$on('error', (e) => {
+  160 |       this.connectionStats.errors++;
+> 161 |       logger.error(`Database error on ${type}`, { error: e });
+      |             ^
+  162 |     });
+  163 |   }
+  164 |
+ ⨯ uncaughtException:  Error: the worker has exited
+    at EventEmitter.eval (lib/db/prisma.ts:161:13)
+  159 |     client.$on('error', (e) => {
+  160 |       this.connectionStats.errors++;
+> 161 |       logger.error(`Database error on ${type}`, { error: e });
+      |             ^
+  162 |     });
+  163 |   }
+  164 |
+Error: the worker has exited
+    at EventEmitter.eval (lib/db/prisma.ts:161:13)
+  159 |     client.$on('error', (e) => {
+  160 |       this.connectionStats.errors++;
+> 161 |       logger.error(`Database error on ${type}`, { error: e });
+      |             ^
+  162 |     });
+  163 |   }
+  164 |
+ ⨯ uncaughtException: Error: the worker has exited
+    at EventEmitter.eval (lib/db/prisma.ts:161:13)
+  159 |     client.$on('error', (e) => {
+  160 |       this.connectionStats.errors++;
+> 161 |       logger.error(`Database error on ${type}`, { error: e });
+      |             ^
+  162 |     });
+  163 |   }
+  164 |
+ ⨯ uncaughtException:  Error: the worker has exited
+    at EventEmitter.eval (lib/db/prisma.ts:161:13)
+  159 |     client.$on('error', (e) => {
+  160 |       this.connectionStats.errors++;
+> 161 |       logger.error(`Database error on ${type}`, { error: e });
+      |             ^
+  162 |     });
+  163 |   }
+  164 |

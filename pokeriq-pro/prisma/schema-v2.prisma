@@ -1,0 +1,947 @@
+// PokerIQ Pro - 优化版 Prisma Schema
+// 高性能PostgreSQL架构 + 分表分区 + 索引优化
+// 支持100万+并发用户的企业级数据架构
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = [
+    "postgresqlExtensions",
+    "fullTextSearch", 
+    "metrics",
+    "tracing",
+    "views",
+    "multiSchema",
+    "relationJoins"
+  ]
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  
+  extensions = [
+    uuid_ossp(map: "uuid-ossp"),
+    pgcrypto,
+    btree_gin,
+    pg_stat_statements,
+    pg_trgm,
+    timescaledb
+  ]
+}
+
+// ==========================================================================
+// 核心用户系统 - Optimized User System
+// ==========================================================================
+
+// 用户模型（按用户ID hash分表）
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  password     String    @db.VarChar(255)
+  name         String?   @db.VarChar(100)
+  username     String?   @unique @db.VarChar(50)
+  avatar       String?   @db.VarChar(500)
+  
+  // 角色和权限
+  role         Role      @default(USER)
+  permissions  String[]  @default([]) @db.VarChar(50)
+  
+  // 等级和经验
+  level        Int       @default(1) @db.SmallInt
+  xp           BigInt    @default(0)
+  
+  // VIP和订阅
+  isVip        Boolean   @default(false)
+  vipLevel     Int       @default(0) @db.SmallInt
+  vipExpiry    DateTime? @db.Timestamp(3)
+  subscriptionTier String @default("free") @db.VarChar(20)
+  
+  // 账户状态
+  status       UserStatus @default(ACTIVE)
+  isBanned     Boolean   @default(false)
+  banReason    String?   @db.VarChar(500)
+  banExpiry    DateTime? @db.Timestamp(3)
+  
+  // 登录统计
+  lastLoginAt  DateTime? @db.Timestamp(3)
+  loginCount   Int       @default(0)
+  loginStreak  Int       @default(0) @db.SmallInt
+  
+  // 配置和偏好（优化JSON存储）
+  preferences  Json?     @db.JsonB
+  settings     Json?     @db.JsonB
+  gameSettings Json?     @db.JsonB
+  
+  // 地理和设备信息
+  timezone     String?   @db.VarChar(50)
+  locale       String    @default("zh-CN") @db.VarChar(10)
+  lastIP       String?   @db.Inet
+  lastDevice   Json?     @db.JsonB
+  
+  // 审计和安全
+  emailVerified    Boolean   @default(false)
+  phoneVerified    Boolean   @default(false)
+  twoFactorEnabled Boolean   @default(false)
+  securityLevel    Int       @default(1) @db.SmallInt
+  
+  // 时间戳
+  createdAt    DateTime  @default(now()) @db.Timestamp(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamp(3)
+  deletedAt    DateTime? @db.Timestamp(3)
+  
+  // 关系 - 优化外键关系
+  profile          UserProfile?
+  stats            UserStats?
+  security         UserSecurity?
+  sessions         GameSession[]
+  trainings        TrainingSession[]
+  achievements     UserAchievement[]
+  transactions     Transaction[]
+  wisdomCoin       WisdomCoin?
+  
+  // 社交关系
+  follows          Follow[]          @relation("Follower")
+  followers        Follow[]          @relation("Following")
+  
+  // AI伴侣
+  companions       UserCompanion[]
+  inventory        UserInventory[]
+  
+  // 排行榜和竞技
+  leaderboardEntries LeaderboardEntry[]
+  testSessions     TestSession[]
+  ladderRank       LadderRank?
+  
+  // 实时数据
+  onlineStatus     OnlineStatus?
+  activeConnections UserConnection[]
+  
+  // 高级索引 - 性能优化
+  @@index([email], map: "idx_user_email")
+  @@index([username], map: "idx_user_username") 
+  @@index([level, xp], map: "idx_user_level_xp")
+  @@index([isVip, vipLevel], map: "idx_user_vip")
+  @@index([status, deletedAt], map: "idx_user_status")
+  @@index([createdAt], map: "idx_user_created", type: BTree)
+  @@index([lastLoginAt], map: "idx_user_last_login", type: BTree)
+  @@index([subscriptionTier, vipExpiry], map: "idx_user_subscription")
+  
+  // 复合索引用于复杂查询
+  @@index([status, level, isVip], map: "idx_user_status_level_vip")
+  @@index([createdAt, level], map: "idx_user_created_level")
+  
+  // GIN索引用于JSON查询
+  @@index([preferences], map: "idx_user_preferences_gin", type: Gin)
+  @@index([gameSettings], map: "idx_user_game_settings_gin", type: Gin)
+  
+  @@map("users")
+}
+
+// 用户详细档案（一对一分离）
+model UserProfile {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @unique @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 个人信息
+  firstName     String?  @db.VarChar(50)
+  lastName      String?  @db.VarChar(50)
+  displayName   String?  @db.VarChar(100)
+  bio           String?  @db.Text
+  birthday      DateTime? @db.Date
+  gender        String?  @db.VarChar(10)
+  
+  // 联系信息
+  phone         String?  @db.VarChar(20)
+  address       Json?    @db.JsonB
+  
+  // 社交链接
+  socialLinks   Json?    @db.JsonB
+  
+  // 扑克背景
+  pokerExperience String? @db.VarChar(20)
+  favoriteTournaments String[] @db.VarChar(100)
+  playingStyle  String?  @db.VarChar(50)
+  goals         String?  @db.Text
+  
+  // 隐私设置
+  profileVisibility String @default("public") @db.VarChar(20)
+  showStats     Boolean  @default(true)
+  allowMessages Boolean  @default(true)
+  
+  createdAt     DateTime @default(now()) @db.Timestamp(3)
+  updatedAt     DateTime @updatedAt @db.Timestamp(3)
+  
+  @@map("user_profiles")
+}
+
+// 用户安全信息（敏感数据分离）
+model UserSecurity {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @unique @db.Uuid
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 密码安全
+  passwordHash    String    @db.VarChar(255)
+  passwordSalt    String    @db.VarChar(100)
+  passwordHistory Json?     @db.JsonB // 存储最近5个密码hash
+  lastPasswordChange DateTime @default(now()) @db.Timestamp(3)
+  
+  // 两步验证
+  twoFactorSecret String?   @db.VarChar(255)
+  twoFactorBackupCodes Json? @db.JsonB
+  twoFactorLastUsed DateTime? @db.Timestamp(3)
+  
+  // 安全令牌
+  resetTokens     Json?     @db.JsonB
+  verificationTokens Json?  @db.JsonB
+  
+  // 登录安全
+  failedLoginAttempts Int   @default(0) @db.SmallInt
+  lockoutUntil    DateTime? @db.Timestamp(3)
+  trustedDevices  Json?     @db.JsonB
+  
+  // 安全日志
+  securityEvents  Json?     @db.JsonB
+  
+  createdAt       DateTime  @default(now()) @db.Timestamp(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamp(3)
+  
+  @@index([userId], map: "idx_user_security_user")
+  @@index([failedLoginAttempts, lockoutUntil], map: "idx_user_security_lockout")
+  
+  @@map("user_security")
+}
+
+// 用户统计（高性能分离表）
+model UserStats {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @unique @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // === 基础统计 ===
+  totalHands    BigInt   @default(0)
+  totalGames    Int      @default(0)
+  totalSessions Int      @default(0)
+  totalTrainingTime BigInt @default(0) // 毫秒
+  
+  // === 胜率统计 ===
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  draws         Int      @default(0)
+  winRate       Decimal  @default(0) @db.Decimal(5,4)
+  
+  // === 盈利统计 ===
+  totalEarnings Decimal  @default(0) @db.Decimal(15,2)
+  totalLosses   Decimal  @default(0) @db.Decimal(15,2)
+  netProfit     Decimal  @default(0) @db.Decimal(15,2)
+  biggestWin    Decimal  @default(0) @db.Decimal(15,2)
+  biggestLoss   Decimal  @default(0) @db.Decimal(15,2)
+  
+  // === 连胜统计 ===
+  currentStreak Int      @default(0) @db.SmallInt
+  bestStreak    Int      @default(0) @db.SmallInt
+  worstStreak   Int      @default(0) @db.SmallInt
+  
+  // === 扑克专业指标 ===
+  vpip          Decimal  @default(0) @db.Decimal(5,2)  // 入池率
+  pfr           Decimal  @default(0) @db.Decimal(5,2)  // 翻前加注率
+  af            Decimal  @default(0) @db.Decimal(5,2)  // 激进度
+  threeBet      Decimal  @default(0) @db.Decimal(5,2)  // 3bet频率
+  fourBet       Decimal  @default(0) @db.Decimal(5,2)  // 4bet频率
+  cbet          Decimal  @default(0) @db.Decimal(5,2)  // 持续下注
+  foldTo3bet    Decimal  @default(0) @db.Decimal(5,2)  // 对3bet弃牌率
+  wtsd          Decimal  @default(0) @db.Decimal(5,2)  // 看到摊牌率
+  w_wsf         Decimal  @default(0) @db.Decimal(5,2)  // 看到翻牌胜率
+  
+  // === 位置统计 ===
+  positionStats Json     @default("{}") @db.JsonB
+  
+  // === 高级指标 ===
+  redlineEv     Decimal  @default(0) @db.Decimal(15,4)  // 红线期望值
+  bluelineEv    Decimal  @default(0) @db.Decimal(15,4)  // 蓝线期望值
+  allinEv       Decimal  @default(0) @db.Decimal(15,4)  // 全押期望值
+  showdownWinRate Decimal @default(0) @db.Decimal(5,4) // 摊牌胜率
+  
+  // === 锦标赛统计 ===
+  tournamentStats Json   @default("{}") @db.JsonB
+  
+  // === 训练成绩 ===
+  trainingAccuracy Decimal @default(0) @db.Decimal(5,2)
+  bestAccuracy     Decimal @default(0) @db.Decimal(5,2)
+  gtoSkillRating   Int     @default(1000) @db.SmallInt
+  
+  // === 时间统计 ===
+  avgSessionTime   Int     @default(0) // 分钟
+  longestSession   Int     @default(0) // 分钟
+  lastActiveAt     DateTime @default(now()) @db.Timestamp(3)
+  
+  // === 成就统计 ===
+  achievementCount Int     @default(0) @db.SmallInt
+  rareAchievements Int     @default(0) @db.SmallInt
+  
+  // 审计字段
+  createdAt     DateTime @default(now()) @db.Timestamp(3)
+  updatedAt     DateTime @updatedAt @db.Timestamp(3)
+  lastCalculated DateTime @default(now()) @db.Timestamp(3)
+  
+  // 性能优化索引
+  @@index([userId], map: "idx_stats_user")
+  @@index([totalHands], map: "idx_stats_hands")
+  @@index([winRate], map: "idx_stats_winrate")
+  @@index([netProfit], map: "idx_stats_profit")
+  @@index([gtoSkillRating], map: "idx_stats_skill")
+  @@index([lastActiveAt], map: "idx_stats_active")
+  @@index([lastCalculated], map: "idx_stats_calculated")
+  
+  // 复合索引
+  @@index([totalHands, winRate], map: "idx_stats_hands_winrate")
+  @@index([netProfit, totalHands], map: "idx_stats_profit_hands")
+  
+  // GIN索引用于JSON查询
+  @@index([positionStats], map: "idx_stats_position_gin", type: Gin)
+  @@index([tournamentStats], map: "idx_stats_tournament_gin", type: Gin)
+  
+  @@map("user_stats")
+}
+
+// 在线状态表（高频更新优化）
+model OnlineStatus {
+  userId        String   @id @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  isOnline      Boolean  @default(false)
+  status        String   @default("offline") @db.VarChar(20) // online, away, busy, invisible
+  lastSeen      DateTime @default(now()) @db.Timestamp(3)
+  currentActivity String? @db.VarChar(50) // training, game, lobby
+  
+  // 连接信息
+  connectionCount Int    @default(0) @db.SmallInt
+  deviceType     String? @db.VarChar(20)
+  platform       String? @db.VarChar(20)
+  
+  updatedAt     DateTime @updatedAt @db.Timestamp(3)
+  
+  @@index([isOnline, lastSeen], map: "idx_online_status")
+  @@index([status, currentActivity], map: "idx_online_activity")
+  
+  @@map("online_status")
+}
+
+// 用户连接管理（WebSocket连接跟踪）
+model UserConnection {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  socketId      String   @unique @db.VarChar(100)
+  sessionId     String   @db.VarChar(100)
+  
+  // 连接信息
+  ipAddress     String   @db.Inet
+  userAgent     String?  @db.Text
+  deviceInfo    Json?    @db.JsonB
+  
+  // 状态
+  isActive      Boolean  @default(true)
+  roomId        String?  @db.VarChar(100) // 当前房间
+  
+  connectedAt   DateTime @default(now()) @db.Timestamp(3)
+  lastPingAt    DateTime @default(now()) @db.Timestamp(3)
+  disconnectedAt DateTime? @db.Timestamp(3)
+  
+  @@index([userId, isActive], map: "idx_connection_user_active")
+  @@index([socketId], map: "idx_connection_socket")
+  @@index([sessionId], map: "idx_connection_session")
+  @@index([roomId], map: "idx_connection_room")
+  @@index([lastPingAt], map: "idx_connection_ping")
+  
+  @@map("user_connections")
+}
+
+// ==========================================================================
+// 游戏系统 - High-Performance Game System
+// ==========================================================================
+
+// 游戏会话（按日期分区的时间序列表）
+model GameSession {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String       @db.Uuid
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 会话标识
+  sessionCode String       @unique @db.VarChar(20) // 短会话码
+  
+  // 游戏类型和配置
+  type        SessionType
+  gameFormat  GameFormat   @default(CASH)
+  stakes      String?      @db.VarChar(50) // "1/2", "5/10"
+  blinds      Json         @db.JsonB // {small: 1, big: 2, ante: 0}
+  
+  // 买入和结果
+  buyIn       Decimal      @db.Decimal(15,2)
+  cashOut     Decimal?     @db.Decimal(15,2)
+  netResult   Decimal?     @db.Decimal(15,2)
+  resultBB    Decimal?     @db.Decimal(10,2) // 结果以大盲计算
+  
+  // 游戏统计
+  hands       Int          @default(0) @db.SmallInt
+  duration    Int          @default(0) // 秒数
+  avgPotSize  Decimal?     @db.Decimal(10,2)
+  
+  // AI对手配置
+  opponentConfigs Json?    @db.JsonB // AI对手配置数组
+  difficulty  Difficulty  @default(INTERMEDIATE)
+  
+  // 桌子配置
+  tableSize   Int          @default(6) @db.SmallInt
+  maxPlayers  Int          @default(6) @db.SmallInt
+  ante        Decimal?     @db.Decimal(5,2)
+  
+  // 游戏状态
+  status      GameSessionStatus @default(ACTIVE)
+  result      GameResult?
+  
+  // 性能数据
+  decisionCount Int        @default(0) @db.SmallInt
+  correctDecisions Int     @default(0) @db.SmallInt
+  accuracy    Decimal?     @db.Decimal(5,2)
+  
+  // 元数据和配置
+  gameConfig  Json?        @db.JsonB
+  summary     Json?        @db.JsonB
+  analytics   Json?        @db.JsonB
+  
+  // 地理和设备
+  location    String?      @db.VarChar(100)
+  device      Json?        @db.JsonB
+  
+  // 时间戳（时间序列优化）
+  createdAt   DateTime     @default(now()) @db.Timestamp(3)
+  startedAt   DateTime?    @db.Timestamp(3)
+  completedAt DateTime?    @db.Timestamp(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamp(3)
+  
+  // 关系
+  handRecords Hand[]
+  gameState   GameState?
+  
+  // 高性能索引
+  @@index([userId, createdAt], map: "idx_session_user_created")
+  @@index([createdAt], map: "idx_session_created")
+  @@index([type, status], map: "idx_session_type_status")
+  @@index([completedAt], map: "idx_session_completed")
+  @@index([result, netResult], map: "idx_session_result")
+  @@index([sessionCode], map: "idx_session_code")
+  @@index([difficulty, type], map: "idx_session_difficulty_type")
+  
+  // 时间序列优化索引
+  @@index([createdAt, userId], map: "idx_session_time_user")
+  @@index([createdAt, type], map: "idx_session_time_type")
+  
+  // 复合查询索引
+  @@index([userId, status, createdAt], map: "idx_session_user_status_time")
+  @@index([type, difficulty, createdAt], map: "idx_session_type_diff_time")
+  
+  // JSON索引
+  @@index([gameConfig], map: "idx_session_config_gin", type: Gin)
+  @@index([summary], map: "idx_session_summary_gin", type: Gin)
+  
+  @@map("game_sessions")
+}
+
+// 手牌记录（高频写入优化，按会话ID分区）
+model Hand {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String      @db.Uuid
+  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  handNumber    Int         @db.SmallInt
+  
+  // 牌面信息（优化存储）
+  holeCards     Json        @db.JsonB // ["Ah", "Kd"]  
+  board         Json        @db.JsonB // 公共牌 ["Qh", "Jd", "10c", "9s", "8h"]
+  
+  // 位置和筹码
+  position      Position
+  stackSize     Decimal     @db.Decimal(12,2)
+  effectiveStack Decimal    @db.Decimal(12,2)
+  
+  // 下注行动（压缩存储）
+  preflopAction Json        @db.JsonB // 翻前行动序列
+  flopAction    Json?       @db.JsonB
+  turnAction    Json?       @db.JsonB  
+  riverAction   Json?       @db.JsonB
+  
+  // 底池和结果
+  potSize       Decimal     @db.Decimal(12,2)
+  finalPot      Decimal     @db.Decimal(12,2)
+  rake          Decimal     @default(0) @db.Decimal(8,2)
+  netWin        Decimal?    @db.Decimal(12,2)
+  winAmount     Decimal?    @db.Decimal(12,2)
+  
+  // 手牌结果
+  result        HandResult
+  showdown      Boolean     @default(false)
+  handStrength  String?     @db.VarChar(30) // 最终牌型
+  handRank      Int?        @db.SmallInt    // 手牌排名(1-169)
+  
+  // AI分析（按需存储）
+  gtoAnalysis   Json?       @db.JsonB
+  expectedValue Decimal?    @db.Decimal(12,4)
+  exploitValue  Decimal?    @db.Decimal(12,4) 
+  mistakeCount  Int         @default(0) @db.SmallInt
+  
+  // 对手信息
+  opponentCount Int         @db.SmallInt
+  activeOpponents Int       @db.SmallInt
+  
+  // 性能指标
+  decisionQuality Decimal?  @db.Decimal(3,2) // 1.00-5.00
+  skillLevel    Int?        @db.SmallInt     // 1-10
+  
+  // 时间戳
+  createdAt     DateTime    @default(now()) @db.Timestamp(3)
+  handStartAt   DateTime?   @db.Timestamp(3)
+  handEndAt     DateTime?   @db.Timestamp(3)
+  
+  // 高性能索引设计
+  @@index([sessionId, handNumber], map: "idx_hand_session_number")
+  @@index([sessionId, createdAt], map: "idx_hand_session_time")
+  @@index([position, result], map: "idx_hand_position_result")
+  @@index([handRank, position], map: "idx_hand_rank_position")
+  @@index([createdAt], map: "idx_hand_created")
+  @@index([netWin], map: "idx_hand_net_win")
+  @@index([showdown, result], map: "idx_hand_showdown_result")
+  
+  // 复合分析索引
+  @@index([position, handRank, result], map: "idx_hand_position_rank_result")
+  @@index([sessionId, position, createdAt], map: "idx_hand_session_pos_time")
+  
+  // JSON分析索引
+  @@index([gtoAnalysis], map: "idx_hand_gto_gin", type: Gin)
+  @@index([preflopAction], map: "idx_hand_preflop_gin", type: Gin)
+  
+  @@map("hands")
+}
+
+// 实时游戏状态（内存表，短期存储）
+model GameState {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String      @unique @db.Uuid
+  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // 当前手牌状态
+  currentHand   Int         @default(1) @db.SmallInt
+  dealerButton  Int         @db.SmallInt // 庄家按钮位置
+  
+  // 游戏阶段
+  street        Street      @default(PREFLOP)
+  actionOn      Int         @db.SmallInt // 当前行动玩家
+  
+  // 玩家状态（优化JSON存储）
+  players       Json        @db.JsonB
+  seatMap       Json        @db.JsonB // 座位映射
+  
+  // 牌面状态
+  deck          String?     @db.Text // 剩余牌堆（加密）
+  board         Json        @default("[]") @db.JsonB
+  
+  // 下注状态
+  pot           Decimal     @default(0) @db.Decimal(12,2)
+  sidePots      Json        @default("[]") @db.JsonB
+  currentBet    Decimal     @default(0) @db.Decimal(10,2)
+  minRaise      Decimal     @default(0) @db.Decimal(10,2)
+  
+  // 时间控制
+  actionTimeout Int         @default(30) @db.SmallInt
+  timeBank      Int         @default(30) @db.SmallInt
+  lastActionAt  DateTime    @default(now()) @db.Timestamp(3)
+  
+  // 游戏配置
+  isActive      Boolean     @default(true)
+  isPaused      Boolean     @default(false)
+  pauseReason   String?     @db.VarChar(100)
+  
+  // 元数据
+  metadata      Json?       @db.JsonB
+  
+  createdAt     DateTime    @default(now()) @db.Timestamp(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamp(3)
+  
+  // 实时查询优化索引
+  @@index([sessionId], map: "idx_gamestate_session")
+  @@index([isActive, updatedAt], map: "idx_gamestate_active")
+  @@index([lastActionAt], map: "idx_gamestate_action_time")
+  @@index([street, actionOn], map: "idx_gamestate_street_action")
+  
+  // JSON查询索引
+  @@index([players], map: "idx_gamestate_players_gin", type: Gin)
+  
+  @@map("game_states")
+}
+
+// ==========================================================================
+// 训练系统 - Advanced Training System
+// ==========================================================================
+
+// 训练会话
+model TrainingSession {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String      @db.Uuid
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 训练配置
+  mode         TrainingMode
+  scenario     String      @db.VarChar(100)
+  difficulty   Difficulty
+  focus        TrainingFocus @default(GENERAL)
+  
+  // AI对手设置
+  opponentStyle String      @db.VarChar(50)
+  opponentConfig Json?      @db.JsonB
+  
+  // 训练目标
+  targetHands  Int?        @db.SmallInt
+  targetTime   Int?        @db.SmallInt // 分钟
+  targetAccuracy Decimal?  @db.Decimal(5,2)
+  
+  // 训练进度
+  handsPlayed  Int         @default(0) @db.SmallInt
+  decisionsTotal Int       @default(0) @db.SmallInt
+  decisionsCorrect Int     @default(0) @db.SmallInt
+  currentStreak Int        @default(0) @db.SmallInt
+  bestStreak   Int         @default(0) @db.SmallInt
+  
+  // 分数和评估
+  score        Decimal     @default(0) @db.Decimal(8,2)
+  accuracy     Decimal     @default(0) @db.Decimal(5,2)
+  skillRating  Int         @default(1000) @db.SmallInt
+  improvementRate Decimal  @default(0) @db.Decimal(5,2)
+  
+  // 财务结果
+  startingChips Decimal    @default(10000) @db.Decimal(12,2)
+  currentChips Decimal     @default(10000) @db.Decimal(12,2)
+  totalProfit  Decimal     @default(0) @db.Decimal(12,2)
+  biggestWin   Decimal     @default(0) @db.Decimal(12,2)
+  biggestLoss  Decimal     @default(0) @db.Decimal(12,2)
+  
+  // 会话状态
+  status       TrainingStatus @default(ACTIVE)
+  pausedAt     DateTime?   @db.Timestamp(3)
+  resumedAt    DateTime?   @db.Timestamp(3)
+  
+  // 学习数据
+  weaknesses   Json?       @db.JsonB // 弱点分析
+  strengths    Json?       @db.JsonB // 优势分析
+  recommendations Json?    @db.JsonB // 推荐改进
+  
+  // 元数据
+  config       Json?       @db.JsonB
+  summary      Json?       @db.JsonB
+  analytics    Json?       @db.JsonB
+  
+  // 时间戳
+  startedAt    DateTime    @default(now()) @db.Timestamp(3)
+  completedAt  DateTime?   @db.Timestamp(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamp(3)
+  
+  // 关系
+  decisions    Decision[]
+  
+  // 训练优化索引
+  @@index([userId, startedAt], map: "idx_training_user_started")
+  @@index([mode, difficulty], map: "idx_training_mode_diff")
+  @@index([status, startedAt], map: "idx_training_status_time")
+  @@index([accuracy, score], map: "idx_training_accuracy_score")
+  @@index([completedAt], map: "idx_training_completed")
+  @@index([skillRating], map: "idx_training_skill")
+  
+  // 复合分析索引
+  @@index([userId, mode, completedAt], map: "idx_training_user_mode_completed")
+  @@index([focus, difficulty, accuracy], map: "idx_training_focus_diff_acc")
+  
+  // JSON分析索引
+  @@index([weaknesses], map: "idx_training_weaknesses_gin", type: Gin)
+  @@index([config], map: "idx_training_config_gin", type: Gin)
+  
+  @@map("training_sessions")
+}
+
+// 决策记录（高频写入表）
+model Decision {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId   String          @db.Uuid
+  session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  decisionNumber Int          @db.SmallInt
+  
+  // 游戏情境
+  gameState   Json            @db.JsonB
+  position    Position
+  stackDepth  Decimal         @db.Decimal(6,2) // BB数
+  potOdds     Decimal?        @db.Decimal(5,2)
+  
+  // 决策信息
+  userAction  String          @db.VarChar(20)
+  userAmount  Decimal?        @db.Decimal(10,2)
+  timeTaken   Int             @db.SmallInt // 毫秒
+  
+  // GTO分析
+  gtoAction   String          @db.VarChar(20)
+  gtoAmount   Decimal?        @db.Decimal(10,2)
+  gtoFrequency Decimal?       @db.Decimal(5,2) // GTO混合频率
+  
+  // 评估结果
+  isCorrect   Boolean
+  evLoss      Decimal         @db.Decimal(8,4) // EV损失
+  score       Decimal         @db.Decimal(5,2) // 0-100分
+  difficulty  Decimal         @db.Decimal(3,2) // 决策难度
+  
+  // 分类和反馈
+  category    DecisionCategory
+  skillArea   SkillArea
+  feedback    Json            @db.JsonB
+  explanation String?         @db.Text
+  
+  // 学习价值
+  learningValue Decimal       @db.Decimal(3,2) // 学习价值评分
+  commonMistake Boolean       @default(false) // 是否为常见错误
+  
+  createdAt   DateTime        @default(now()) @db.Timestamp(3)
+  
+  // 决策分析索引
+  @@index([sessionId, decisionNumber], map: "idx_decision_session_number")
+  @@index([sessionId, createdAt], map: "idx_decision_session_time")
+  @@index([isCorrect, category], map: "idx_decision_correct_category")
+  @@index([skillArea, score], map: "idx_decision_skill_score")
+  @@index([evLoss], map: "idx_decision_ev_loss")
+  @@index([difficulty, learningValue], map: "idx_decision_difficulty_value")
+  
+  // 学习分析索引
+  @@index([commonMistake, category], map: "idx_decision_mistake_category")
+  @@index([position, category, isCorrect], map: "idx_decision_pos_cat_correct")
+  
+  // JSON索引
+  @@index([gameState], map: "idx_decision_gamestate_gin", type: Gin)
+  @@index([feedback], map: "idx_decision_feedback_gin", type: Gin)
+  
+  @@map("decisions")
+}
+
+// ==========================================================================
+// 枚举定义 - Enhanced Enums
+// ==========================================================================
+
+enum Role {
+  USER
+  PREMIUM
+  VIP
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE  
+  SUSPENDED
+  BANNED
+  DELETED
+}
+
+enum SessionType {
+  CASH
+  TOURNAMENT
+  SNG         // Sit & Go
+  TRAINING
+  SKILL_TEST
+  FREEROLL
+  SATELLITE
+}
+
+enum GameFormat {
+  CASH
+  TOURNAMENT
+  SNG
+  HEADS_UP
+  ZOOM
+  SPIN_GO
+}
+
+enum GameSessionStatus {
+  WAITING
+  ACTIVE
+  PAUSED  
+  COMPLETED
+  ABANDONED
+  CANCELLED
+}
+
+enum Street {
+  PREFLOP
+  FLOP
+  TURN
+  RIVER
+  SHOWDOWN
+}
+
+enum Position {
+  UTG
+  UTG_1
+  UTG_2
+  MP
+  MP_1
+  MP_2
+  CO
+  BTN
+  SB
+  BB
+}
+
+enum GameResult {
+  WIN
+  LOSS
+  DRAW
+  ABANDONED
+}
+
+enum HandResult {
+  WIN
+  LOSS
+  TIE
+  FOLD
+  TIMEOUT
+}
+
+enum TrainingMode {
+  GTO
+  EXPLOITATIVE
+  MIXED
+  TOURNAMENT
+  HEADS_UP
+  PREFLOP
+  POSTFLOP
+  ENDGAME
+}
+
+enum TrainingFocus {
+  GENERAL
+  PREFLOP_RANGES
+  POSTFLOP_PLAY
+  BLUFFING
+  VALUE_BETTING
+  POT_ODDS
+  POSITION_PLAY
+  BANKROLL_MANAGEMENT
+  TOURNAMENT_STRATEGY
+  HEADS_UP_PLAY
+}
+
+enum TrainingStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ABANDONED
+  FAILED
+}
+
+enum Difficulty {
+  BEGINNER
+  EASY
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+  MASTER
+  LEGENDARY
+}
+
+enum DecisionCategory {
+  PREFLOP_OPEN
+  PREFLOP_3BET
+  PREFLOP_4BET
+  PREFLOP_CALL
+  FLOP_CBET
+  FLOP_CHECK
+  FLOP_CALL
+  FLOP_RAISE
+  TURN_CBET
+  TURN_CHECK
+  TURN_CALL
+  TURN_RAISE
+  RIVER_VALUE
+  RIVER_BLUFF
+  RIVER_CALL
+  RIVER_FOLD
+  ALL_IN
+  FOLD_TO_3BET
+  SQUEEZE
+  ISOLATION
+}
+
+enum SkillArea {
+  HAND_READING
+  POSITION_AWARENESS
+  POT_ODDS
+  IMPLIED_ODDS
+  BLUFFING
+  VALUE_BETTING
+  BANKROLL_MANAGEMENT
+  EMOTIONAL_CONTROL
+  TABLE_SELECTION
+  GAME_THEORY
+  EXPLOITATION
+  TOURNAMENT_PLAY
+}
+
+enum AchievementCategory {
+  TRAINING
+  STATS
+  SPECIAL
+  MILESTONE
+  SOCIAL
+  COLLECTION
+  SKILL
+  DEDICATION
+  ACCOMPLISHMENT
+}
+
+enum Rarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+  MYTHIC
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  SUBSCRIPTION
+  REWARD
+  PURCHASE
+  REFUND
+  BONUS
+  CASHBACK
+  TOURNAMENT_ENTRY
+  TOURNAMENT_PRIZE
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+// ==========================================================================
+// 继续其他模型定义...
+// ==========================================================================
+
+// 其他模型将在下一部分继续定义...

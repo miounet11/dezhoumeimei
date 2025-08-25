@@ -1,0 +1,142 @@
+{
+  "name": "PokerIQ Pro - 德州扑克智能训练平台",
+  "short_name": "PokerIQ",
+  "description": "专业的德州扑克AI训练平台，提供GTO策略学习、实战训练和数据分析",
+  "version": "1.0.1",
+  "manifest_version": 3,
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "categories": ["games", "education", "sports"],
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-home.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "主页面"
+    },
+    {
+      "src": "/screenshots/desktop-gto.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "GTO训练中心"
+    },
+    {
+      "src": "/screenshots/mobile-home.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "label": "移动端主页"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI训练",
+      "short_name": "训练",
+      "description": "开始AI实战训练",
+      "url": "/ai-training",
+      "icons": [
+        {
+          "src": "/icons/training.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "GTO中心",
+      "short_name": "GTO",
+      "description": "学习GTO策略",
+      "url": "/gto-training",
+      "icons": [
+        {
+          "src": "/icons/gto.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "数据分析",
+      "short_name": "分析",
+      "description": "查看游戏数据",
+      "url": "/analytics",
+      "icons": [
+        {
+          "src": "/icons/analytics.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.pokeriq.pro",
+      "id": "com.pokeriq.pro"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/pokeriq-pro/id123456789"
+    }
+  ],
+  "prefer_related_applications": false,
+  "protocol_handlers": [
+    {
+      "protocol": "web+poker",
+      "url": "/game?type=%s"
+    }
+  ]
+}

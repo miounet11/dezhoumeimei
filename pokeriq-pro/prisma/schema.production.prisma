@@ -1,0 +1,400 @@
+// 生产环境 Prisma Schema
+// 使用 PostgreSQL 数据库
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户模型
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  password     String
+  name         String?
+  username     String?   @unique
+  avatar       String?
+  role         Role      @default(USER)
+  level        Int       @default(1)
+  xp           Int       @default(0)
+  isVip        Boolean   @default(false)
+  vipExpiry    DateTime?
+  isBanned     Boolean   @default(false)
+  lastLoginAt  DateTime?
+  loginCount   Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  // 索引优化
+  @@index([email])
+  @@index([username])
+  @@index([createdAt])
+  @@index([lastLoginAt])
+  
+  // 关系
+  stats         UserStats?
+  sessions      GameSession[]
+  trainings     TrainingSession[]
+  achievements  UserAchievement[]
+  transactions  Transaction[]
+  follows       Follow[]        @relation("follower")
+  followers     Follow[]        @relation("following")
+  companions    UserCompanion[]
+  inventory     UserInventory[]
+  wisdomCoin    WisdomCoin?
+  leaderboardEntries LeaderboardEntry[]
+}
+
+// 用户统计（优化查询性能）
+model UserStats {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  totalHands    Int      @default(0)
+  totalGames    Int      @default(0)
+  winRate       Float    @default(0)
+  totalEarnings Float    @default(0)
+  vpip          Float    @default(0)
+  pfr           Float    @default(0)
+  af            Float    @default(0)
+  wtsd          Float    @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([winRate])
+  @@index([totalEarnings])
+}
+
+// 游戏会话（添加分区支持）
+model GameSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  gameType      String
+  stakes        String
+  buyIn         Float
+  cashOut       Float?
+  duration      Int      // 分钟
+  handsPlayed   Int
+  profit        Float
+  
+  startTime     DateTime
+  endTime       DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  hands         Hand[]
+  
+  // 按时间分区的索引
+  @@index([userId, startTime])
+  @@index([gameType])
+  @@index([startTime])
+  @@index([createdAt])
+}
+
+// 手牌记录（考虑分表）
+model Hand {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  handNumber    Int
+  position      String
+  holeCards     String
+  communityCards String?
+  action        String
+  potSize       Float
+  result        String
+  profit        Float
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// 训练会话
+model TrainingSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  scenarioType  String
+  difficulty    String
+  score         Int
+  duration      Int      // 秒
+  handsPlayed   Int
+  correctDecisions Int
+  mistakes      Json?    // 错误详情
+  feedback      Json?    // AI反馈
+  
+  completedAt   DateTime @default(now())
+  
+  @@index([userId, completedAt])
+  @@index([scenarioType])
+}
+
+// 成就系统
+model Achievement {
+  id            String   @id @default(cuid())
+  codeName      String   @unique
+  name          String
+  description   String
+  category      AchievementCategory
+  rarity        AchievementRarity
+  points        Int
+  requirement   Json     // 达成条件
+  icon          String
+  
+  createdAt     DateTime @default(now())
+  
+  userAchievements UserAchievement[]
+  
+  @@index([category])
+  @@index([rarity])
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  
+  progress      Float    @default(0)
+  unlockedAt    DateTime?
+  
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([unlockedAt])
+}
+
+// 交易记录
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type          TransactionType
+  amount        Float
+  currency      String   @default("CNY")
+  status        TransactionStatus
+  provider      String?  // 支付提供商
+  externalId    String?  // 外部交易ID
+  metadata      Json?
+  
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+  
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([externalId])
+}
+
+// AI伴侣系统
+model AICompanion {
+  id            String   @id @default(cuid())
+  codeName      String   @unique
+  name          String
+  nameLocalized Json     // 多语言名称
+  personality   String
+  backstory     Json     // 背景故事
+  region        String
+  voiceType     String
+  basePrice     Int      @default(0)
+  rarity        String
+  tags          String[]
+  isActive      Boolean  @default(true)
+  
+  createdAt     DateTime @default(now())
+  
+  userCompanions UserCompanion[]
+  
+  @@index([rarity])
+  @@index([isActive])
+}
+
+model UserCompanion {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companionId       String
+  companion         AICompanion @relation(fields: [companionId], references: [id])
+  
+  relationshipLevel Int      @default(1)
+  intimacyPoints    Int      @default(0)
+  totalInteractions Int      @default(0)
+  lastInteraction   DateTime?
+  currentMood       String   @default("normal")
+  isPrimary         Boolean  @default(false)
+  unlockedAt        DateTime @default(now())
+  
+  interactions      CompanionInteraction[]
+  gifts            GiftHistory[]
+  memories         CompanionMemory[]
+  
+  @@unique([userId, companionId])
+  @@index([userId])
+  @@index([isPrimary])
+}
+
+// 其他支持表...
+model CompanionInteraction {
+  id            String   @id @default(cuid())
+  userCompanionId String
+  userCompanion UserCompanion @relation(fields: [userCompanionId], references: [id], onDelete: Cascade)
+  
+  type          String
+  content       String?
+  response      String?
+  moodChange    Int      @default(0)
+  intimacyGain  Int      @default(0)
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userCompanionId, createdAt])
+}
+
+model GiftHistory {
+  id            String   @id @default(cuid())
+  userCompanionId String
+  userCompanion UserCompanion @relation(fields: [userCompanionId], references: [id], onDelete: Cascade)
+  
+  giftType      String
+  giftValue     Int
+  intimacyGain  Int
+  response      String?
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userCompanionId, createdAt])
+}
+
+model CompanionMemory {
+  id            String   @id @default(cuid())
+  userCompanionId String
+  userCompanion UserCompanion @relation(fields: [userCompanionId], references: [id], onDelete: Cascade)
+  
+  eventType     String
+  description   String
+  importance    Int      @default(1)
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userCompanionId])
+}
+
+// 智慧币系统
+model WisdomCoin {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  balance       Int      @default(0)
+  totalEarned   Int      @default(0)
+  totalSpent    Int      @default(0)
+  
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+}
+
+// 用户物品
+model UserInventory {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  itemType      String
+  itemId        String
+  quantity      Int      @default(1)
+  metadata      Json?
+  
+  acquiredAt    DateTime @default(now())
+  
+  @@unique([userId, itemType, itemId])
+  @@index([userId])
+}
+
+// 关注关系
+model Follow {
+  id            String   @id @default(cuid())
+  followerId    String
+  follower      User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId   String
+  following     User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// 排行榜
+model LeaderboardEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type          String   // daily, weekly, monthly, all-time
+  category      String   // earnings, hands, winrate, etc
+  score         Float
+  rank          Int
+  
+  periodStart   DateTime
+  periodEnd     DateTime
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([userId, type, category, periodStart])
+  @@index([type, category, periodStart])
+  @@index([rank])
+}
+
+// 枚举类型
+enum Role {
+  USER
+  VIP
+  MODERATOR
+  ADMIN
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  PURCHASE
+  REWARD
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AchievementCategory {
+  TRAINING
+  STATISTICS
+  SPECIAL
+  MILESTONE
+}
+
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}

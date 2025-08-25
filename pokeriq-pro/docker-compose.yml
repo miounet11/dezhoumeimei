@@ -1,0 +1,782 @@
+# PokerIQ Pro - Production Docker Compose Configuration
+# PostgreSQL + Redis + ClickHouse + Monitoring Stack
+# 支持100万+并发用户的企业级部署架构
+
+version: '3.8'
+
+# ===== 网络定义 =====
+networks:
+  pokeriq-frontend:
+    driver: bridge
+  pokeriq-backend:
+    driver: bridge
+    internal: true
+  pokeriq-database:
+    driver: bridge
+    internal: true
+  pokeriq-monitoring:
+    driver: bridge
+
+# ===== 数据卷定义 =====
+volumes:
+  # PostgreSQL 数据卷
+  postgres-primary-data:
+    driver: local
+  postgres-replica-data:
+    driver: local
+  
+  # Redis 数据卷
+  redis-primary-data:
+    driver: local
+  redis-cache-data:
+    driver: local
+  redis-session-data:
+    driver: local
+  redis-queue-data:
+    driver: local
+  
+  # ClickHouse 数据卷
+  clickhouse-data:
+    driver: local
+  clickhouse-logs:
+    driver: local
+  
+  # 监控数据卷
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  
+  # 应用数据卷
+  app-uploads:
+    driver: local
+  app-logs:
+    driver: local
+
+# ===== 服务定义 =====
+services:
+  # ==========================================
+  # 数据库服务 - Database Services
+  # ==========================================
+  
+  # PostgreSQL 主数据库
+  postgres-primary:
+    image: postgres:15-alpine
+    container_name: pokeriq-postgres-primary
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pokeriq_pro
+      POSTGRES_USER: pokeriq_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+      # 性能优化配置
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: pg_stat_statements,pg_hint_plan
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./database/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./database/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./database/init-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
+      - ./database/init-schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+    ports:
+      - "5432:5432"
+    networks:
+      - pokeriq-database
+      - pokeriq-monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokeriq_user -d pokeriq_pro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # PostgreSQL 只读副本
+  postgres-replica:
+    image: postgres:15-alpine
+    container_name: pokeriq-postgres-replica
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pokeriq_pro
+      POSTGRES_USER: pokeriq_readonly
+      POSTGRES_PASSWORD: ${POSTGRES_REPLICA_PASSWORD}
+      POSTGRES_MASTER_HOST: postgres-primary
+      POSTGRES_MASTER_PORT: 5432
+      POSTGRES_MASTER_USER: pokeriq_user
+      POSTGRES_MASTER_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+      - ./database/postgresql-replica.conf:/etc/postgresql/postgresql.conf:ro
+      - ./database/setup-replica.sh:/docker-entrypoint-initdb.d/setup-replica.sh:ro
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "5433:5432"
+    networks:
+      - pokeriq-database
+      - pokeriq-monitoring
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokeriq_readonly -d pokeriq_pro"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # ==========================================
+  # Redis 集群 - Redis Cluster
+  # ==========================================
+  
+  # Redis 主实例 - 热点数据缓存
+  redis-primary:
+    image: redis:7-alpine
+    container_name: pokeriq-redis-primary
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+      --appendfsync everysec
+      --tcp-keepalive 60
+      --timeout 300
+      --databases 16
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-primary-data:/data
+      - ./database/redis-primary.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    networks:
+      - pokeriq-database
+      - pokeriq-monitoring
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+          cpus: '1.0'
+        reservations:
+          memory: 2G
+          cpus: '0.5'
+
+  # Redis 缓存实例
+  redis-cache:
+    image: redis:7-alpine
+    container_name: pokeriq-redis-cache
+    restart: unless-stopped
+    command: >
+      redis-server
+      --port 6380
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --tcp-keepalive 60
+      --timeout 300
+      --requirepass ${REDIS_CACHE_PASSWORD}
+    volumes:
+      - redis-cache-data:/data
+    ports:
+      - "6380:6380"
+    networks:
+      - pokeriq-database
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6380", "--raw", "incr", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+          cpus: '0.5'
+
+  # Redis 会话存储
+  redis-session:
+    image: redis:7-alpine
+    container_name: pokeriq-redis-session
+    restart: unless-stopped
+    command: >
+      redis-server
+      --port 6381
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --appendonly yes
+      --appendfsync everysec
+      --requirepass ${REDIS_SESSION_PASSWORD}
+    volumes:
+      - redis-session-data:/data
+    ports:
+      - "6381:6381"
+    networks:
+      - pokeriq-database
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6381", "--raw", "incr", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 750M
+          cpus: '0.5'
+
+  # Redis 消息队列
+  redis-queue:
+    image: redis:7-alpine
+    container_name: pokeriq-redis-queue
+    restart: unless-stopped
+    command: >
+      redis-server
+      --port 6382
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --save 60 1000
+      --appendonly yes
+      --appendfsync everysec
+      --requirepass ${REDIS_QUEUE_PASSWORD}
+    volumes:
+      - redis-queue-data:/data
+    ports:
+      - "6382:6382"
+    networks:
+      - pokeriq-database
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6382", "--raw", "incr", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 750M
+          cpus: '0.5'
+
+  # ==========================================
+  # ClickHouse 分析数据库
+  # ==========================================
+  
+  clickhouse:
+    image: clickhouse/clickhouse-server:23-alpine
+    container_name: pokeriq-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: pokeriq_analytics
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      - ./database/clickhouse-config.xml:/etc/clickhouse-server/config.xml:ro
+      - ./database/clickhouse-users.xml:/etc/clickhouse-server/users.xml:ro
+      - ./database/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    networks:
+      - pokeriq-database
+      - pokeriq-monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # ==========================================
+  # 应用服务 - Application Services  
+  # ==========================================
+  
+  # Next.js 主应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_ENV: production
+    container_name: pokeriq-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # 数据库连接
+      DATABASE_URL: postgresql://pokeriq_user:${POSTGRES_PASSWORD}@postgres-primary:5432/pokeriq_pro
+      SHADOW_DATABASE_URL: postgresql://pokeriq_user:${POSTGRES_PASSWORD}@postgres-primary:5432/pokeriq_pro_shadow
+      # Redis 连接
+      REDIS_HOST: redis-primary
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_CACHE_HOST: redis-cache
+      REDIS_CACHE_PORT: 6380
+      REDIS_SESSION_HOST: redis-session
+      REDIS_SESSION_PORT: 6381
+      REDIS_QUEUE_HOST: redis-queue
+      REDIS_QUEUE_PORT: 6382
+      # ClickHouse 连接
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: pokeriq_analytics
+      # 应用配置
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      # 外部服务
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      SENTRY_DSN: ${SENTRY_DSN}
+    volumes:
+      - app-uploads:/app/uploads
+      - app-logs:/app/logs
+    ports:
+      - "3000:3000"
+    networks:
+      - pokeriq-frontend
+      - pokeriq-backend
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-primary:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+      replicas: 2
+
+  # WebSocket 服务
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket
+    container_name: pokeriq-websocket
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      REDIS_HOST: redis-primary
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SOCKET_PORT: 8850
+    ports:
+      - "8850:8850"
+    networks:
+      - pokeriq-frontend
+      - pokeriq-backend
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8850/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # AI 训练服务
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: pokeriq-ai-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres-primary
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: pokeriq_pro
+      POSTGRES_USER: pokeriq_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis-primary
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+    ports:
+      - "8000:8000"
+    networks:
+      - pokeriq-backend
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+  # ==========================================
+  # 负载均衡和代理 - Load Balancer & Proxy
+  # ==========================================
+  
+  # Nginx 负载均衡器
+  nginx:
+    image: nginx:alpine
+    container_name: pokeriq-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - app-uploads:/var/www/uploads:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - pokeriq-frontend
+    depends_on:
+      - app
+      - websocket
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # ==========================================
+  # 监控服务 - Monitoring Services
+  # ==========================================
+  
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pokeriq-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - pokeriq-monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+
+  # Grafana 仪表板
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pokeriq-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-worldmap-panel
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3001:3000"
+    networks:
+      - pokeriq-monitoring
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # Node Exporter - 系统监控
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: pokeriq-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - pokeriq-monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # Redis Exporter - Redis 监控
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: pokeriq-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis-primary:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "9121:9121"
+    networks:
+      - pokeriq-monitoring
+      - pokeriq-database
+    depends_on:
+      - redis-primary
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # Postgres Exporter - PostgreSQL 监控
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: pokeriq-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://pokeriq_user:${POSTGRES_PASSWORD}@postgres-primary:5432/pokeriq_pro?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - pokeriq-monitoring
+      - pokeriq-database
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # ==========================================
+  # 日志管理 - Logging
+  # ==========================================
+  
+  # Loki 日志聚合
+  loki:
+    image: grafana/loki:latest
+    container_name: pokeriq-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+    ports:
+      - "3100:3100"
+    networks:
+      - pokeriq-monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # Promtail 日志收集
+  promtail:
+    image: grafana/promtail:latest
+    container_name: pokeriq-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/log:/var/log:ro
+      - app-logs:/var/log/app:ro
+      - ./monitoring/promtail/promtail-config.yaml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - pokeriq-monitoring
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # ==========================================
+  # 管理工具 - Management Tools
+  # ==========================================
+  
+  # pgAdmin - PostgreSQL 管理
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pokeriq-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - ./database/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    ports:
+      - "8080:80"
+    networks:
+      - pokeriq-monitoring
+      - pokeriq-database
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # Redis Commander - Redis 管理
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: pokeriq-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: |
+        primary:redis-primary:6379:0:${REDIS_PASSWORD},
+        cache:redis-cache:6380:0:${REDIS_CACHE_PASSWORD},
+        session:redis-session:6381:0:${REDIS_SESSION_PASSWORD},
+        queue:redis-queue:6382:0:${REDIS_QUEUE_PASSWORD}
+    ports:
+      - "8081:8081"
+    networks:
+      - pokeriq-monitoring
+      - pokeriq-database
+    depends_on:
+      - redis-primary
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+  # ==========================================
+  # 备份服务 - Backup Services
+  # ==========================================
+  
+  # 数据库备份
+  backup:
+    image: postgres:15-alpine
+    container_name: pokeriq-backup
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: /backup.sh
+    networks:
+      - pokeriq-database
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    profiles:
+      - backup
+
+# ==========================================
+# 扩展配置
+# ==========================================
+
+# 开发环境覆盖
+x-development: &development
+  environment:
+    NODE_ENV: development
+    DEBUG: "pokeriq:*"
+  volumes:
+    - .:/app
+    - /app/node_modules
+  command: npm run dev
+
+# 生产环境扩展
+x-production: &production
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "100m"
+      max-file: "3"

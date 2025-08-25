@@ -1,0 +1,65 @@
+{
+  "appId": "com.pokeriq.pro",
+  "appName": "PokerIQ Pro",
+  "webDir": "out",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#0f172a",
+  "npmClient": "npm",
+  "server": {
+    "url": "https://pokeriq.pro",
+    "cleartext": true
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile",
+    "scrollEnabled": false,
+    "limitsNavigationsToAppBoundDomains": true,
+    "allowsLinkPreview": false,
+    "backgroundColor": "#0f172a",
+    "minVersion": "13.0"
+  },
+  "android": {
+    "backgroundColor": "#0f172a",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "minWebViewVersion": 90,
+    "useLegacyBridge": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 3000,
+      "launchAutoHide": true,
+      "backgroundColor": "#0f172a",
+      "androidSplashResourceName": "splash",
+      "iosSplashResourceName": "splash",
+      "showSpinner": true,
+      "spinnerStyle": "large",
+      "spinnerColor": "#10b981"
+    },
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#0f172a"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "resizeOnFullScreen": true
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  },
+  "cordova": {
+    "preferences": {
+      "ScrollEnabled": "false",
+      "BackupWebStorage": "none",
+      "DisallowOverscroll": "true",
+      "FadeSplashScreenDuration": "300",
+      "SplashScreenDelay": "3000",
+      "orientation": "default",
+      "StatusBarOverlaysWebView": "false",
+      "StatusBarBackgroundColor": "#0f172a",
+      "StatusBarStyle": "lightcontent"
+    }
+  }
+}

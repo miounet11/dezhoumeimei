@@ -1,0 +1,435 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "PokerIQ Pro - 高性能监控仪表板",
+    "tags": ["pokeriq", "performance", "poker", "high-concurrency"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "5s",
+    "schemaVersion": 30,
+    "version": 1,
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m"],
+      "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "系统概览",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "pokeriq_active_users{user_type=\"total\"}",
+            "legendFormat": "活跃用户数",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_http_requests_total[5m]) * 60",
+            "legendFormat": "每分钟请求数",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pokeriq_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "API响应时间P95(ms)",
+            "refId": "C"
+          },
+          {
+            "expr": "(rate(pokeriq_http_requests_total{status_code=~\"5..\"}[5m]) / rate(pokeriq_http_requests_total[5m])) * 100",
+            "legendFormat": "错误率(%)",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 800000},
+                {"color": "red", "value": 950000}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "API响应时间P95(ms)"},
+              "properties": [
+                {"id": "unit", "value": "ms"},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 100},
+                    {"color": "red", "value": 200}
+                  ]
+                }}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "错误率(%)"},
+              "properties": [
+                {"id": "unit", "value": "percent"},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 5},
+                    {"color": "red", "value": 10}
+                  ]
+                }}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "并发用户实时监控",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "pokeriq_active_users{user_type=\"total\"}",
+            "legendFormat": "总活跃用户",
+            "refId": "A"
+          },
+          {
+            "expr": "pokeriq_active_users{user_type=\"premium\"}",
+            "legendFormat": "付费用户",
+            "refId": "B"
+          },
+          {
+            "expr": "pokeriq_websocket_connections_active",
+            "legendFormat": "WebSocket连接数",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "pointSize": 5
+            }
+          }
+        },
+        "options": {
+          "legend": {"displayMode": "table", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 3,
+        "title": "API性能监控",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(pokeriq_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P50响应时间",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pokeriq_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P95响应时间",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(pokeriq_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99响应时间",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "数据库性能监控",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(pokeriq_db_query_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "数据库查询P95(ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "pokeriq_db_connections_active",
+            "legendFormat": "活跃连接数",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_db_queries_total[5m])",
+            "legendFormat": "每秒查询数",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "数据库查询P95(ms)"},
+              "properties": [{"id": "unit", "value": "ms"}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "title": "Redis缓存性能",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "(rate(pokeriq_cache_hits_total[5m]) / (rate(pokeriq_cache_hits_total[5m]) + rate(pokeriq_cache_misses_total[5m]))) * 100",
+            "legendFormat": "缓存命中率(%)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pokeriq_cache_operation_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "Redis操作P95(ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_cache_hits_total[5m]) + rate(pokeriq_cache_misses_total[5m])",
+            "legendFormat": "每秒缓存操作数",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "缓存命中率(%)"},
+              "properties": [
+                {"id": "unit", "value": "percent"},
+                {"id": "min", "value": 0},
+                {"id": "max", "value": 100}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Redis操作P95(ms)"},
+              "properties": [{"id": "unit", "value": "ms"}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 6,
+        "title": "AI引擎性能",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(pokeriq_ai_decision_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "AI决策时间P95(ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_ai_requests_total[5m])",
+            "legendFormat": "每秒AI请求数",
+            "refId": "B"
+          },
+          {
+            "expr": "(rate(pokeriq_ai_requests_total{status=\"error\"}[5m]) / rate(pokeriq_ai_requests_total[5m])) * 100",
+            "legendFormat": "AI服务错误率(%)",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "AI决策时间P95(ms)"},
+              "properties": [{"id": "unit", "value": "ms"}]
+            },
+            {
+              "matcher": {"id": "byName", "options": "AI服务错误率(%)"},
+              "properties": [{"id": "unit", "value": "percent"}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 7,
+        "title": "游戏业务指标",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(pokeriq_game_sessions_total[5m])",
+            "legendFormat": "每秒新游戏会话",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_hands_played_total[5m])",
+            "legendFormat": "每秒扑克手牌数",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_training_sessions_total[5m])",
+            "legendFormat": "每秒训练会话",
+            "refId": "C"
+          },
+          {
+            "expr": "avg(pokeriq_user_skill_score)",
+            "legendFormat": "平均技能分数",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "系统资源使用率",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU使用率 - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "内存使用率 - {{instance}}",
+            "refId": "B"
+          },
+          {
+            "expr": "(1 - (node_filesystem_avail_bytes{fstype!=\"tmpfs\"} / node_filesystem_size_bytes{fstype!=\"tmpfs\"})) * 100",
+            "legendFormat": "磁盘使用率 - {{instance}}:{{mountpoint}}",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "错误统计",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(pokeriq_errors_total{severity=\"critical\"}[5m])",
+            "legendFormat": "严重错误/秒",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_errors_total{severity=\"high\"}[5m])",
+            "legendFormat": "高级错误/秒",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_errors_total{severity=\"medium\"}[5m])",
+            "legendFormat": "中级错误/秒",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(pokeriq_errors_total{severity=\"low\"}[5m])",
+            "legendFormat": "低级错误/秒",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "热门API端点 Top 10",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(pokeriq_http_requests_total[5m])) by (route))",
+            "legendFormat": "",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "auto",
+              "align": "auto"
+            }
+          }
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "route": "API路由",
+                "Value": "每秒请求数"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "支付系统监控",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
+        "targets": [
+          {
+            "expr": "rate(pokeriq_payment_requests_total{status=\"success\"}[5m])",
+            "legendFormat": "成功支付/秒",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_payment_requests_total{status!=\"success\"}[5m])",
+            "legendFormat": "失败支付/秒",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_payment_amount_total[5m])",
+            "legendFormat": "支付金额/秒",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      }
+    ]
+  }
+}

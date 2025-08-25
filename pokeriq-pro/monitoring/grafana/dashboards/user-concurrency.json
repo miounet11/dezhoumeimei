@@ -1,0 +1,352 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "PokerIQ Pro - 高并发用户监控",
+    "tags": ["pokeriq", "users", "concurrency", "scalability"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "5s",
+    "schemaVersion": 30,
+    "version": 1,
+    "time": {
+      "from": "now-4h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "实时并发用户统计",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "pokeriq_active_users{user_type=\"total\"}",
+            "legendFormat": "总活跃用户",
+            "refId": "A"
+          },
+          {
+            "expr": "pokeriq_active_users{user_type=\"premium\"}",
+            "legendFormat": "付费用户",
+            "refId": "B"
+          },
+          {
+            "expr": "pokeriq_active_users{user_type=\"free\"}",
+            "legendFormat": "免费用户",
+            "refId": "C"
+          },
+          {
+            "expr": "pokeriq_websocket_connections_active",
+            "legendFormat": "WebSocket连接",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 500000},
+                {"color": "orange", "value": 800000},
+                {"color": "red", "value": 950000}
+              ]
+            }
+          }
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "id": 2,
+        "title": "用户增长趋势",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
+        "targets": [
+          {
+            "expr": "pokeriq_active_users{user_type=\"total\"}",
+            "legendFormat": "总活跃用户",
+            "refId": "A"
+          },
+          {
+            "expr": "pokeriq_active_users{user_type=\"premium\"}",
+            "legendFormat": "付费用户",
+            "refId": "B"
+          },
+          {
+            "expr": "pokeriq_active_users{user_type=\"free\"}",
+            "legendFormat": "免费用户",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2,
+              "fillOpacity": 20,
+              "pointSize": 5,
+              "stacking": {"mode": "none"},
+              "axisPlacement": "auto"
+            }
+          }
+        },
+        "options": {
+          "legend": {"displayMode": "table", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 3,
+        "title": "用户地理分布",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+        "targets": [
+          {
+            "expr": "sum by(region) (pokeriq_active_users)",
+            "legendFormat": "{{region}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        },
+        "options": {
+          "pieType": "pie",
+          "legend": {"displayMode": "table", "placement": "right"}
+        }
+      },
+      {
+        "id": 4,
+        "title": "用户登录统计",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+        "targets": [
+          {
+            "expr": "rate(pokeriq_user_login_total{success=\"true\"}[5m]) * 60",
+            "legendFormat": "成功登录/分钟",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_user_login_total{success=\"false\"}[5m]) * 60",
+            "legendFormat": "失败登录/分钟",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_user_signup_total{success=\"true\"}[5m]) * 60",
+            "legendFormat": "新用户注册/分钟",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "WebSocket连接监控",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+        "targets": [
+          {
+            "expr": "pokeriq_websocket_connections_active",
+            "legendFormat": "活跃连接数",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(pokeriq_websocket_messages_total{direction=\"in\"}[5m])",
+            "legendFormat": "入站消息/秒",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(pokeriq_websocket_messages_total{direction=\"out\"}[5m])",
+            "legendFormat": "出站消息/秒",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "用户会话时长分布",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+        "targets": [
+          {
+            "expr": "increase(pokeriq_game_session_duration_seconds_bucket[5m])",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "spectrum"}
+          }
+        },
+        "options": {
+          "calculate": false,
+          "yAxis": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "容量规划预警",
+        "type": "bargauge",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 30},
+        "targets": [
+          {
+            "expr": "(pokeriq_active_users{user_type=\"total\"} / 1000000) * 100",
+            "legendFormat": "用户容量使用率(%)",
+            "refId": "A"
+          },
+          {
+            "expr": "(pokeriq_websocket_connections_active / 500000) * 100",
+            "legendFormat": "WebSocket容量使用率(%)",
+            "refId": "B"
+          },
+          {
+            "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU使用率(%)",
+            "refId": "C"
+          },
+          {
+            "expr": "(1 - (avg(node_memory_MemAvailable_bytes) / avg(node_memory_MemTotal_bytes))) * 100",
+            "legendFormat": "内存使用率(%)",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "orange", "value": 85},
+                {"color": "red", "value": 95}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 8,
+        "title": "高并发性能指标",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "pokeriq_active_users{user_type=\"total\"}",
+            "legendFormat": "当前并发用户数",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pokeriq_http_request_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "API响应时间P95(ms)",
+            "refId": "B",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "rate(pokeriq_http_requests_total[5m]) * 60",
+            "legendFormat": "每分钟API请求数",
+            "refId": "C",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "(rate(pokeriq_http_requests_total{status_code=~\"5..\"}[5m]) / rate(pokeriq_http_requests_total[5m])) * 100",
+            "legendFormat": "错误率(%)",
+            "refId": "D",
+            "format": "table",
+            "instant": true
+          },
+          {
+            "expr": "(rate(pokeriq_cache_hits_total[5m]) / (rate(pokeriq_cache_hits_total[5m]) + rate(pokeriq_cache_misses_total[5m]))) * 100",
+            "legendFormat": "缓存命中率(%)",
+            "refId": "E",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "color-background",
+              "align": "center"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "API响应时间P95(ms)"},
+              "properties": [
+                {"id": "unit", "value": "ms"},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 100},
+                    {"color": "red", "value": 200}
+                  ]
+                }}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "错误率(%)"},
+              "properties": [
+                {"id": "unit", "value": "percent"},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 5},
+                    {"color": "red", "value": 10}
+                  ]
+                }}
+              ]
+            }
+          ]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "Value #A": "当前并发用户数",
+                "Value #B": "API响应时间P95(ms)",
+                "Value #C": "每分钟API请求数",
+                "Value #D": "错误率(%)",
+                "Value #E": "缓存命中率(%)"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

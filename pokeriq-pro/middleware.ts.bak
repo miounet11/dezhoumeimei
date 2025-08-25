@@ -1,0 +1,94 @@
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+// 公开路由（不需要认证）
+const publicRoutes = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/',
+  '/test',
+  '/test-opponents',
+  '/debug',
+  '/simple',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/refresh',
+  '/api/auth/verify',
+  '/api/auth/session',
+  '/api/auth/csrf',
+  '/api/auth/providers',
+  '/api/auth/callback',
+  '/api/auth/signout',
+  '/api/auth/signin',
+  '/api/opponents',
+  '/api/opponents/test',
+  '/api/leaderboard',
+  '/api/achievements',
+  '/api/companions'
+];
+
+// 静态资源路径
+const staticPaths = [
+  '/_next',
+  '/favicon.ico',
+  '/api/health',
+  '/api/auth' // Allow all NextAuth routes
+];
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
+  // 跳过静态资源和NextAuth API routes
+  if (staticPaths.some(path => pathname.startsWith(path))) {
+    return NextResponse.next();
+  }
+  
+  // Skip all NextAuth API routes
+  if (pathname.startsWith('/api/auth')) {
+    return NextResponse.next();
+  }
+  
+  // 检查是否是公开路由
+  const isPublicRoute = publicRoutes.includes(pathname);
+  
+  // 获取认证token
+  const accessToken = request.cookies.get('accessToken')?.value;
+  const refreshToken = request.cookies.get('refreshToken')?.value;
+  
+  // 如果是认证页面但用户已登录，重定向到dashboard
+  if (isPublicRoute && pathname.startsWith('/auth/') && accessToken) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  
+  // 如果不是公开路由且没有token，重定向到登录页
+  if (!isPublicRoute && !accessToken) {
+    // 如果有refresh token，可以尝试刷新
+    if (refreshToken) {
+      // 这里可以添加刷新token的逻辑
+      // 暂时直接重定向到登录页
+      const loginUrl = new URL('/auth/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    
+    const loginUrl = new URL('/auth/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+  
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * 匹配所有路径除了：
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public files with extensions
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)',
+  ],
+};

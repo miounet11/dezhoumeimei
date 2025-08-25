@@ -1,0 +1,175 @@
+/**
+ * Prometheus监控配置文件
+ * 适用于PokerIQ Pro高并发扑克训练平台
+ */
+
+global:
+  scrape_interval: 15s          # 默认抓取间隔
+  evaluation_interval: 15s      # 评估规则间隔
+  external_labels:
+    cluster: 'pokeriq-production'
+    environment: 'prod'
+
+# 告警管理器配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# 规则文件配置
+rule_files:
+  - "alert_rules.yml"
+  - "recording_rules.yml"
+
+# 抓取配置
+scrape_configs:
+  # Prometheus自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # PokerIQ Pro应用监控
+  - job_name: 'pokeriq-app'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: '/api/monitoring/metrics'
+    static_configs:
+      - targets: 
+          - 'app:8830'
+          - 'app:8831'
+          - 'app:8832'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__address__]
+        regex: '.*:(\d+)'
+        target_label: port
+        replacement: '${1}'
+
+  # AI服务监控
+  - job_name: 'pokeriq-ai-service'
+    scrape_interval: 5s
+    scrape_timeout: 3s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+          - 'ai-service:8000'
+          - 'ai-service:8001'
+          - 'ai-service:8002'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'python_.*'
+        action: drop
+
+  # Redis监控
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # PostgreSQL监控
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # Node.js应用监控
+  - job_name: 'nodejs'
+    scrape_interval: 10s
+    static_configs:
+      - targets: 
+          - 'nodejs-app:3000'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'process_.*'
+        action: keep
+
+  # 系统监控 (Node Exporter)
+  - job_name: 'node'
+    static_configs:
+      - targets: 
+          - 'node-exporter:9100'
+    scrape_interval: 15s
+
+  # 负载均衡器监控
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+
+  # Docker容器监控
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 20s
+
+  # Kubernetes监控 (如果使用K8s)
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+  # 自定义游戏业务指标监控
+  - job_name: 'pokeriq-game-metrics'
+    scrape_interval: 5s
+    metrics_path: '/api/game/metrics'
+    static_configs:
+      - targets: ['game-service:8840']
+    scrape_configs:
+      - honor_labels: true
+
+  # 支付系统监控
+  - job_name: 'payment-service'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['payment:8850']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'payment_.*'
+        action: keep
+
+# 远程写入配置 (用于长期存储)
+remote_write:
+  - url: 'http://victoriametrics:8428/api/v1/write'
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'high_cardinality_.*'
+        action: drop
+
+# 远程读取配置
+remote_read:
+  - url: 'http://victoriametrics:8428/api/v1/read'
+    read_recent: true
+
+# 存储配置
+storage:
+  tsdb:
+    retention.time: 30d           # 保留30天数据
+    retention.size: 100GB         # 最大存储100GB
+    wal-compression: true         # 启用WAL压缩

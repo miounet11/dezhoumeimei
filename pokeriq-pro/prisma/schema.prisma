@@ -1,0 +1,1265 @@
+// PokerIQ Pro - Production-Ready Prisma Schema
+// 支持100万+并发用户，高性能数据架构
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================================================
+// 核心用户系统 - Core User System
+// ==========================================================================
+
+// 用户模型（分区表）
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String    @unique @db.VarChar(255)
+  password     String    @db.VarChar(255)
+  name         String?   @db.VarChar(100)
+  username     String?   @unique @db.VarChar(50)
+  avatar       String?   @db.VarChar(500)
+  role         Role      @default(USER)
+  level        Int       @default(1) @db.SmallInt
+  xp           Int       @default(0)
+  isVip        Boolean   @default(false)
+  vipExpiry    DateTime? @db.Timestamp(3)
+  isBanned     Boolean   @default(false)
+  lastLoginAt  DateTime? @db.Timestamp(3)
+  loginCount   Int       @default(0)
+  
+  // 元数据
+  metadata     Json?     @db.JsonB
+  preferences  Json?     @db.JsonB
+  settings     Json?     @db.JsonB
+  
+  // 审计字段
+  createdAt    DateTime  @default(now()) @db.Timestamp(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamp(3)
+  deletedAt    DateTime? @db.Timestamp(3)
+  
+  // 关系
+  stats         UserStats?
+  sessions      GameSession[]
+  trainings     TrainingSession[]
+  achievements  UserAchievement[]
+  transactions  Transaction[]
+  follows       Follow[]        @relation("follower")
+  followers     Follow[]        @relation("following")
+  companions    UserCompanion[]
+  inventory     UserInventory[]
+  wisdomCoin    WisdomCoin?
+  leaderboardEntries LeaderboardEntry[]
+  testSessions  TestSession[]
+  ladderRank    LadderRank?
+  
+  @@index([email])
+  @@index([username])
+  @@index([level])
+  @@index([isVip])
+  @@index([createdAt])
+  @@index([lastLoginAt])
+  @@map("users")
+}
+
+// 用户统计（分区表，按月分区）
+model UserStats {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @unique @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 基础统计
+  totalHands    Int      @default(0)
+  totalGames    Int      @default(0)
+  winRate       Float    @default(0) @db.DoublePrecision
+  totalEarnings Float    @default(0) @db.DoublePrecision
+  currentStreak Int      @default(0) @db.SmallInt
+  bestStreak    Int      @default(0) @db.SmallInt
+  
+  // 扑克统计指标
+  vpip          Float    @default(0) @db.DoublePrecision  // Voluntarily Put money In Pot
+  pfr           Float    @default(0) @db.DoublePrecision  // Pre-Flop Raise
+  af            Float    @default(0) @db.DoublePrecision  // Aggression Factor
+  threeBet      Float    @default(0) @db.DoublePrecision  // 3-bet frequency
+  cbet          Float    @default(0) @db.DoublePrecision  // Continuation Bet
+  wtsd          Float    @default(0) @db.DoublePrecision  // Went To Showdown
+  w_wsf         Float    @default(0) @db.DoublePrecision  // Won When Saw Flop
+  
+  // 高级指标
+  redlineEv     Float    @default(0) @db.DoublePrecision  // 红线期望值
+  bluelineEv    Float    @default(0) @db.DoublePrecision  // 蓝线期望值
+  allinEv       Float    @default(0) @db.DoublePrecision  // All-in期望值
+  
+  // 时间统计
+  trainingHours Float    @default(0) @db.DoublePrecision
+  lastActiveAt  DateTime @default(now()) @db.Timestamp(3)
+  
+  // 审计字段
+  createdAt     DateTime @default(now()) @db.Timestamp(3)
+  updatedAt     DateTime @updatedAt @db.Timestamp(3)
+  
+  @@index([userId])
+  @@index([totalHands])
+  @@index([winRate])
+  @@index([lastActiveAt])
+  @@map("user_stats")
+}
+
+// ==========================================================================
+// 游戏系统 - Game System (按日期分区)
+// ==========================================================================
+
+// 游戏会话（按日期分区）
+model GameSession {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String       @db.Uuid
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 游戏信息
+  type        SessionType
+  stakes      String?      @db.VarChar(50)
+  buyIn       Float        @db.DoublePrecision
+  cashOut     Float?       @db.DoublePrecision
+  result      GameResult
+  hands       Int          @db.SmallInt
+  duration    Int          // 秒数
+  
+  // AI对手配置
+  opponentId  String?      @db.Uuid
+  opponentIds Json?        @db.JsonB // AI对手ID列表
+  
+  // 游戏配置
+  tableSize   Int          @default(6) @db.SmallInt
+  blinds      Json         @db.JsonB // {small: 1, big: 2}
+  ante        Float?       @db.DoublePrecision
+  
+  // 元数据
+  gameConfig  Json?        @db.JsonB
+  summary     Json?        @db.JsonB
+  
+  // 审计字段
+  createdAt   DateTime     @default(now()) @db.Timestamp(3)
+  completedAt DateTime?    @db.Timestamp(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamp(3)
+  
+  // 关系
+  handRecords Hand[]
+  gameState   GameState?
+  opponent    Opponent?    @relation(fields: [opponentId], references: [id])
+  
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([completedAt])
+  @@index([result])
+  @@map("game_sessions")
+}
+
+// 手牌记录（高频表，按日期分区）
+model Hand {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String      @db.Uuid
+  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  handNumber    Int         @db.SmallInt
+  
+  // 牌面信息
+  holeCards     Json        @db.JsonB // ["Ah", "Kd"]
+  communityCards Json       @db.JsonB // ["Qh", "Jd", "10c", "9s", "8h"]
+  
+  // 位置和筹码
+  position      String      @db.VarChar(10) // BTN, SB, BB, UTG, MP, CO
+  stackSize     Float       @db.DoublePrecision
+  
+  // 游戏过程（优化存储）
+  preflopActions Json       @db.JsonB // 翻前动作序列
+  flopActions    Json?      @db.JsonB // 翻牌动作序列
+  turnActions    Json?      @db.JsonB // 转牌动作序列
+  riverActions   Json?      @db.JsonB // 河牌动作序列
+  
+  // 结果
+  pot           Float       @db.DoublePrecision
+  rake          Float       @default(0) @db.DoublePrecision
+  winAmount     Float?      @db.DoublePrecision
+  result        HandResult
+  showdown      Boolean     @default(false)
+  handStrength  String?     @db.VarChar(20) // 最终牌型
+  
+  // AI分析（可选，减少存储）
+  analysis      Json?       @db.JsonB
+  ev            Float?      @db.DoublePrecision
+  mistakes      Int         @default(0) @db.SmallInt
+  
+  // 审计字段
+  createdAt     DateTime    @default(now()) @db.Timestamp(3)
+  
+  @@index([sessionId, handNumber])
+  @@index([createdAt])
+  @@index([position])
+  @@index([result])
+  @@map("hands")
+}
+
+// ==========================================================================
+// 训练系统 - Training System
+// ==========================================================================
+
+// 训练会话
+model TrainingSession {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String      @db.Uuid
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  mode         TrainingMode
+  scenario     String      @db.VarChar(100)
+  difficulty   Difficulty
+  opponentStyle String     @db.VarChar(50)
+  
+  handsPlayed  Int         @default(0) @db.SmallInt
+  correctDecisions Int     @default(0) @db.SmallInt
+  score        Float       @default(0) @db.DoublePrecision
+  totalProfit  Float       @default(0) @db.DoublePrecision
+  
+  // 元数据
+  config       Json?       @db.JsonB
+  summary      Json?       @db.JsonB
+  
+  startedAt    DateTime    @default(now()) @db.Timestamp(3)
+  completedAt  DateTime?   @db.Timestamp(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamp(3)
+  
+  // 关系
+  decisions    Decision[]
+  
+  @@index([userId])
+  @@index([mode])
+  @@index([startedAt])
+  @@map("training_sessions")
+}
+
+// 决策记录
+model Decision {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId   String          @db.Uuid
+  session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  gameState   Json           @db.JsonB // 游戏状态
+  action      String         @db.VarChar(20) // 玩家动作
+  isCorrect   Boolean
+  optimalAction String       @db.VarChar(20) // 最优动作
+  ev          Float          @db.DoublePrecision // 期望值
+  reasoning   String?        @db.Text // AI解释
+  
+  createdAt   DateTime       @default(now()) @db.Timestamp(3)
+  
+  @@index([sessionId])
+  @@index([isCorrect])
+  @@map("decisions")
+}
+
+// ==========================================================================
+// 成就系统 - Achievement System
+// ==========================================================================
+
+// 成就定义
+model Achievement {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String            @unique @db.VarChar(50)
+  name        String            @db.VarChar(100)
+  description String            @db.Text
+  category    AchievementCategory
+  rarity      Rarity
+  icon        String            @db.VarChar(100)
+  requirement Json              @db.JsonB // 达成条件
+  reward      Json?             @db.JsonB // 奖励内容
+  
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now()) @db.Timestamp(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamp(3)
+  
+  // 关系
+  users       UserAchievement[]
+  
+  @@index([category])
+  @@index([rarity])
+  @@index([isActive])
+  @@map("achievements")
+}
+
+// 用户成就关联
+model UserAchievement {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String      @db.Uuid
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String     @db.Uuid
+  achievement  Achievement @relation(fields: [achievementId], references: [id])
+  
+  progress     Float       @default(0) @db.DoublePrecision
+  completed    Boolean     @default(false)
+  unlockedAt   DateTime?   @db.Timestamp(3)
+  
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([completed])
+  @@map("user_achievements")
+}
+
+// ==========================================================================
+// 交易系统 - Transaction System
+// ==========================================================================
+
+// 交易记录（按月分区）
+model Transaction {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String          @db.Uuid
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type        TransactionType
+  amount      Float           @db.DoublePrecision
+  currency    String          @default("CNY") @db.VarChar(10)
+  status      TransactionStatus
+  description String?         @db.Text
+  
+  paymentMethod String?       @db.VarChar(50)
+  referenceId   String?       @db.VarChar(100) // 外部支付系统ID
+  
+  // 元数据
+  metadata    Json?           @db.JsonB
+  
+  createdAt   DateTime        @default(now()) @db.Timestamp(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamp(3)
+  
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+// ==========================================================================
+// 社交系统 - Social System
+// ==========================================================================
+
+// 关注关系
+model Follow {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  followerId  String   @db.Uuid
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String   @db.Uuid
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now()) @db.Timestamp(3)
+  
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+// ==========================================================================
+// 实时游戏状态 - Real-time Game State
+// ==========================================================================
+
+// 游戏状态（内存表，Redis缓存）
+model GameState {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String      @unique @db.Uuid
+  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // 当前手牌信息
+  currentHandNumber Int      @default(1) @db.SmallInt
+  dealerPosition Int        @db.SmallInt // 庄家位置索引
+  
+  // 玩家状态（优化JSON存储）
+  players       Json        @db.JsonB // [{seat: 0, stack: 1000, status: "active", cards: [...]}]
+  
+  // 牌面
+  deck          String      @db.Text // 剩余牌堆（加密存储）
+  communityCards Json       @default("[]") @db.JsonB // 公共牌
+  
+  // 下注状态
+  pot           Float       @default(0) @db.DoublePrecision
+  currentBet    Float       @default(0) @db.DoublePrecision
+  minRaise      Float       @default(0) @db.DoublePrecision
+  
+  // 游戏阶段
+  street        Street      @default(PREFLOP)
+  actionOn      Int         @db.SmallInt // 当前行动玩家座位
+  
+  // 时间控制
+  lastActionAt  DateTime    @default(now()) @db.Timestamp(3)
+  timeBank      Int         @default(30) @db.SmallInt // 时间银行（秒）
+  
+  updatedAt     DateTime    @updatedAt @db.Timestamp(3)
+  
+  @@index([sessionId])
+  @@index([lastActionAt])
+  @@map("game_states")
+}
+
+// ==========================================================================
+// AI伴侣系统 - AI Companion System (Enhanced)
+// ==========================================================================
+
+// AI伴侣定义（增强版）
+model AICompanion {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  codeName         String                @unique @db.VarChar(50)
+  name             String                @db.VarChar(100)
+  nameLocalized    Json                  @db.JsonB
+  personality      String                @db.VarChar(50)
+  backstory        Json                  @db.JsonB
+  region           String                @db.VarChar(20)
+  voiceType        String                @db.VarChar(20)
+  basePrice        Int                   @default(0) @db.SmallInt
+  rarity           String                @default("common") @db.VarChar(20)
+  tags             Json                  @db.JsonB // ["cute", "professional", "friendly"]
+  defaultOutfitId  String?               @db.Uuid
+  isActive         Boolean               @default(true)
+  
+  // 增强的AI配置
+  aiModelConfig    Json                  @db.JsonB // AI模型配置
+  personalityTraits Json                 @db.JsonB // 性格特征权重
+  emotionalRange   Json                  @db.JsonB // 情感范围配置
+  learningCapacity Float                 @default(1.0) @db.DoublePrecision // 学习能力
+  memoryRetention  Float                 @default(0.8) @db.DoublePrecision // 记忆保持率
+  adaptabilityScore Float                @default(0.5) @db.DoublePrecision // 适应性评分
+  
+  // 性能优化字段
+  popularityScore  Int                   @default(0) // 受欢迎程度
+  interactionCount Int                   @default(0) // 总互动次数
+  avgSessionTime   Float                 @default(0) @db.DoublePrecision // 平均会话时间
+  
+  createdAt        DateTime              @default(now()) @db.Timestamp(3)
+  updatedAt        DateTime              @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  userRelationships UserCompanion[]
+  outfits          CompanionOutfit[]
+  voicePacks       VoicePack[]
+  dialogues        CompanionDialogue[]
+  animations       CompanionAnimation[]
+  dialogueTemplates DialogueTemplate[]
+  roleTemplates    CompanionRoleTemplate[]
+  conversationHistories ConversationHistory[]
+  emotionalStates  EmotionalStateLog[]
+  
+  @@index([codeName])
+  @@index([rarity])
+  @@index([isActive])
+  @@index([popularityScore])
+  @@index([interactionCount])
+  @@map("ai_companions")
+}
+
+// 伴侣角色模板系统（新增）
+model CompanionRoleTemplate {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companionId       String              @db.Uuid
+  roleName          String              @db.VarChar(50) // "poker_mentor", "casual_friend", "study_partner"
+  roleDescription   Json                @db.JsonB // 多语言描述
+  
+  // 角色配置
+  conversationStyle String              @db.VarChar(30) // "formal", "casual", "encouraging"
+  knowledgeLevel    String              @db.VarChar(20) // "beginner", "intermediate", "expert"
+  interactionMode   String              @db.VarChar(30) // "reactive", "proactive", "mixed"
+  
+  // 对话参数
+  responseLength    String              @default("medium") @db.VarChar(20) // "short", "medium", "long"
+  humorLevel        Float               @default(0.5) @db.DoublePrecision // 幽默程度 0-1
+  formalityLevel    Float               @default(0.5) @db.DoublePrecision // 正式程度 0-1
+  encouragementLevel Float              @default(0.7) @db.DoublePrecision // 鼓励程度 0-1
+  
+  // 专业知识配置
+  pokerExpertise    Json                @db.JsonB // 扑克专业知识领域
+  teachingStyle     Json                @db.JsonB // 教学风格配置
+  feedbackApproach  Json                @db.JsonB // 反馈方式配置
+  
+  // 触发条件
+  activationTriggers Json               @db.JsonB // 角色激活条件
+  contextualHints   Json                @db.JsonB // 上下文提示
+  
+  // 状态
+  isActive          Boolean             @default(true)
+  usageCount        Int                 @default(0)
+  avgRating         Float               @default(0) @db.DoublePrecision
+  
+  createdAt         DateTime            @default(now()) @db.Timestamp(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  companion         AICompanion         @relation(fields: [companionId], references: [id])
+  conversations     ConversationHistory[]
+  
+  @@index([companionId, roleName])
+  @@index([isActive, usageCount])
+  @@map("companion_role_templates")
+}
+
+// 对话历史存储系统（新增，按日期分区优化）
+model ConversationHistory {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userCompanionId   String              @db.Uuid
+  companionId       String              @db.Uuid
+  roleTemplateId    String?             @db.Uuid
+  sessionId         String              @db.VarChar(100) // 会话标识
+  
+  // 消息内容
+  messageType       String              @db.VarChar(20) // "user", "companion", "system"
+  content           Text                // 消息内容
+  contentMetadata   Json?               @db.JsonB // 内容元数据（情感、意图等）
+  
+  // 上下文信息
+  gameContext       Json?               @db.JsonB // 游戏上下文
+  emotionalContext  Json?               @db.JsonB // 情感上下文
+  userState         Json?               @db.JsonB // 用户状态
+  
+  // AI处理信息
+  processingTime    Int?                @db.SmallInt // AI处理时间(ms)
+  confidenceScore   Float?              @db.DoublePrecision // AI置信度
+  alternativeResponses Json?            @db.JsonB // 备选回复
+  
+  // 质量评分
+  userRating        Int?                @db.SmallInt // 用户评分 1-5
+  relevanceScore    Float?              @db.DoublePrecision // 相关性评分
+  helpfulnessScore  Float?              @db.DoublePrecision // 有用性评分
+  
+  // 时间戳（分区键）
+  conversationDate  Date                @db.Date // 用于分区
+  createdAt         DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  userCompanion     UserCompanion       @relation(fields: [userCompanionId], references: [id])
+  companion         AICompanion         @relation(fields: [companionId], references: [id])
+  roleTemplate      CompanionRoleTemplate? @relation(fields: [roleTemplateId], references: [id])
+  
+  @@index([userCompanionId, sessionId])
+  @@index([companionId, conversationDate])
+  @@index([roleTemplateId, createdAt])
+  @@index([messageType, createdAt])
+  @@index([conversationDate]) // 分区索引
+  @@map("conversation_histories")
+}
+
+// 用户伴侣关系
+model UserCompanion {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String              @db.Uuid
+  companionId       String              @db.Uuid
+  relationshipLevel Int                 @default(1) @db.SmallInt
+  intimacyPoints    Int                 @default(0)
+  totalInteractions Int                 @default(0)
+  lastInteraction   DateTime?           @db.Timestamp(3)
+  currentOutfitId   String?             @db.Uuid
+  currentMood       String              @default("neutral") @db.VarChar(20)
+  unlockedOutfits   Json                @default("[]") @db.JsonB
+  unlockedVoices    Json                @default("[]") @db.JsonB
+  customSettings    Json?               @db.JsonB
+  isActive          Boolean             @default(true)
+  isPrimary         Boolean             @default(false)
+  
+  // 增强的关系数据
+  preferredRoleId   String?             @db.Uuid // 偏好角色
+  conversationStyle Json                @default("{}") @db.JsonB // 对话风格偏好
+  memoryPriorities  Json                @default("{}") @db.JsonB // 记忆优先级
+  learningProfile   Json                @default("{}") @db.JsonB // 学习档案
+  
+  // 实时状态缓存
+  currentEmotionalState Json            @default("{}") @db.JsonB // 当前情感状态
+  sessionContext    Json?               @db.JsonB // 会话上下文
+  lastAIResponse    Json?               @db.JsonB // 最后AI回复缓存
+  
+  createdAt         DateTime            @default(now()) @db.Timestamp(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companion         AICompanion         @relation(fields: [companionId], references: [id])
+  interactions      CompanionInteraction[]
+  gifts             GiftHistory[]
+  memories          CompanionMemory[]
+  conversations     ConversationHistory[]
+  emotionalStates   EmotionalStateLog[]
+  
+  @@unique([userId, companionId])
+  @@index([userId])
+  @@index([companionId])
+  @@index([isPrimary])
+  @@index([lastInteraction])
+  @@map("user_companions")
+}
+
+// 情感状态日志系统（新增）
+model EmotionalStateLog {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userCompanionId   String              @db.Uuid
+  companionId       String              @db.Uuid
+  
+  // 情感状态数据
+  emotionalState    String              @db.VarChar(30) // 主要情感状态
+  intensity         Float               @default(0.5) @db.DoublePrecision // 强度 0-1
+  
+  // 细分情感维度
+  happiness         Float               @default(0.5) @db.DoublePrecision
+  excitement        Float               @default(0.5) @db.DoublePrecision
+  trust             Float               @default(0.5) @db.DoublePrecision
+  comfort           Float               @default(0.5) @db.DoublePrecision
+  curiosity         Float               @default(0.5) @db.DoublePrecision
+  empathy           Float               @default(0.5) @db.DoublePrecision
+  
+  // 触发原因
+  trigger           String?             @db.VarChar(50) // 触发事件类型
+  triggerContext    Json?               @db.JsonB // 触发上下文
+  userAction        String?             @db.VarChar(30) // 用户行为
+  
+  // 状态变化
+  previousState     Json?               @db.JsonB // 前一状态
+  stateTransition   Json?               @db.JsonB // 状态转换详情
+  expectedDuration  Int?                @db.SmallInt // 预期持续时间(分钟)
+  
+  // 时间信息
+  stateDate         Date                @db.Date // 分区键
+  createdAt         DateTime            @default(now()) @db.Timestamp(3)
+  expiresAt         DateTime?           @db.Timestamp(3) // 状态过期时间
+  
+  // Relations
+  userCompanion     UserCompanion       @relation(fields: [userCompanionId], references: [id])
+  companion         AICompanion         @relation(fields: [companionId], references: [id])
+  
+  @@index([userCompanionId, createdAt])
+  @@index([companionId, emotionalState])
+  @@index([stateDate]) // 分区索引
+  @@index([expiresAt]) // 清理过期数据
+  @@map("emotional_state_logs")
+}
+
+// 伴侣记忆系统（增强版）
+model CompanionMemory {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userCompanionId String              @db.Uuid
+  memoryType      String              @db.VarChar(30) // "conversation", "achievement", "preference", "emotional_moment"
+  
+  // 记忆内容
+  title           String              @db.VarChar(200)
+  description     String              @db.Text
+  detailedContent Json?               @db.JsonB // 详细记忆内容
+  
+  // 重要性和优先级
+  importance      Int                 @default(1) @db.SmallInt // 1-10 重要性等级
+  priority        String              @default("normal") @db.VarChar(20) // "low", "normal", "high", "critical"
+  emotionalWeight Float               @default(0.0) @db.DoublePrecision // 情感权重
+  
+  // 上下文关联
+  relatedGameEvents Json?             @db.JsonB // 相关游戏事件
+  conversationContext Json?           @db.JsonB // 对话上下文
+  userStateContext Json?              @db.JsonB // 用户状态上下文
+  
+  // 记忆特性
+  isRecurringTheme Boolean            @default(false) // 是否为重复主题
+  accessCount     Int                 @default(0) // 访问次数
+  lastAccessedAt  DateTime?           @db.Timestamp(3) // 最后访问时间
+  
+  // 时间衰减
+  memoryStrength  Float               @default(1.0) @db.DoublePrecision // 记忆强度（衰减）
+  decayRate       Float               @default(0.01) @db.DoublePrecision // 衰减率
+  lastDecayUpdate DateTime            @default(now()) @db.Timestamp(3)
+  
+  // 记忆标签和分类
+  tags            Json                @default("[]") @db.JsonB // 记忆标签
+  category        String?             @db.VarChar(30) // 记忆分类
+  subcategory     String?             @db.VarChar(30) // 子分类
+  
+  // 关联记忆
+  parentMemoryId  String?             @db.Uuid // 父记忆ID
+  relatedMemories Json?               @db.JsonB // 相关记忆ID列表
+  
+  metadata        Json?               @db.JsonB
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  userCompanion   UserCompanion       @relation(fields: [userCompanionId], references: [id])
+  parentMemory    CompanionMemory?    @relation("MemoryHierarchy", fields: [parentMemoryId], references: [id])
+  childMemories   CompanionMemory[]   @relation("MemoryHierarchy")
+  
+  @@index([userCompanionId])
+  @@index([importance, priority])
+  @@index([memoryType, createdAt])
+  @@index([lastAccessedAt])
+  @@index([memoryStrength])
+  @@index([category, subcategory])
+  @@map("companion_memories")
+}
+
+// 伴侣服装
+model CompanionOutfit {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companionId     String              @db.Uuid
+  name            String              @db.VarChar(100)
+  nameLocalized   Json                @db.JsonB
+  category        String              @db.VarChar(20)
+  rarity          String              @default("common") @db.VarChar(20)
+  price           Int                 @default(0) @db.SmallInt
+  requiredLevel   Int                 @default(1) @db.SmallInt
+  imageUrl        String?             @db.VarChar(500)
+  thumbnailUrl    String?             @db.VarChar(500)
+  description     Json                @db.JsonB
+  unlockCondition Json?               @db.JsonB
+  isDefault       Boolean             @default(false)
+  isActive        Boolean             @default(true)
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  companion       AICompanion         @relation(fields: [companionId], references: [id])
+  
+  @@index([companionId])
+  @@index([category])
+  @@map("companion_outfits")
+}
+
+// 虚拟物品
+model VirtualItem {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemType        String              @db.VarChar(20)
+  name            String              @db.VarChar(100)
+  nameLocalized   Json                @db.JsonB
+  description     Json                @db.JsonB
+  category        String              @db.VarChar(20)
+  rarity          String              @default("common") @db.VarChar(20)
+  price           Int                 @db.SmallInt
+  effectType      String?             @db.VarChar(30)
+  effectValue     Int?                @db.SmallInt
+  imageUrl        String?             @db.VarChar(500)
+  isConsumable    Boolean             @default(false)
+  maxStack        Int                 @default(1) @db.SmallInt
+  isActive        Boolean             @default(true)
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  inventory       UserInventory[]
+  giftHistory     GiftHistory[]
+  
+  @@index([itemType])
+  @@index([category])
+  @@map("virtual_items")
+}
+
+// 用户物品库存
+model UserInventory {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String              @db.Uuid
+  itemId          String              @db.Uuid
+  quantity        Int                 @default(1) @db.SmallInt
+  acquiredAt      DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item            VirtualItem         @relation(fields: [itemId], references: [id])
+  
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@map("user_inventory")
+}
+
+// 礼物历史
+model GiftHistory {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String              @db.Uuid
+  companionId     String              @db.Uuid
+  userCompanionId String              @db.Uuid
+  itemId          String              @db.Uuid
+  quantity        Int                 @default(1) @db.SmallInt
+  intimacyGained  Int                 @default(0) @db.SmallInt
+  moodChange      String?             @db.VarChar(20)
+  message         String?             @db.Text
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  userCompanion   UserCompanion       @relation(fields: [userCompanionId], references: [id])
+  item            VirtualItem         @relation(fields: [itemId], references: [id])
+  
+  @@index([userCompanionId])
+  @@index([createdAt])
+  @@map("gift_history")
+}
+
+// 伴侣互动记录
+model CompanionInteraction {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userCompanionId String              @db.Uuid
+  interactionType String              @db.VarChar(20)
+  context         String?             @db.VarChar(50)
+  duration        Int?                @db.SmallInt
+  messageCount    Int                 @default(0) @db.SmallInt
+  intimacyGained  Int                 @default(0) @db.SmallInt
+  moodBefore      String?             @db.VarChar(20)
+  moodAfter       String?             @db.VarChar(20)
+  metadata        Json?               @db.JsonB
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  userCompanion   UserCompanion       @relation(fields: [userCompanionId], references: [id])
+  
+  @@index([userCompanionId])
+  @@index([createdAt])
+  @@map("companion_interactions")
+}
+
+// 伴侣记忆
+model CompanionMemory {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userCompanionId String              @db.Uuid
+  memoryType      String              @db.VarChar(30)
+  title           String              @db.VarChar(200)
+  description     String              @db.Text
+  importance      Int                 @default(1) @db.SmallInt
+  metadata        Json?               @db.JsonB
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  userCompanion   UserCompanion       @relation(fields: [userCompanionId], references: [id])
+  
+  @@index([userCompanionId])
+  @@index([createdAt])
+  @@map("companion_memories")
+}
+
+// 伴侣对话
+model CompanionDialogue {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companionId     String              @db.Uuid
+  context         String              @db.VarChar(50)
+  mood            String?             @db.VarChar(20)
+  relationLevel   Int                 @default(1) @db.SmallInt
+  dialogue        Json                @db.JsonB
+  audioUrl        String?             @db.VarChar(500)
+  weight          Int                 @default(100) @db.SmallInt
+  isActive        Boolean             @default(true)
+  
+  // Relations
+  companion       AICompanion         @relation(fields: [companionId], references: [id])
+  
+  @@index([companionId, context])
+  @@map("companion_dialogues")
+}
+
+// 伴侣动画
+model CompanionAnimation {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companionId     String              @db.Uuid
+  animationType   String              @db.VarChar(30)
+  context         String?             @db.VarChar(50)
+  animationUrl    String              @db.VarChar(500)
+  duration        Int                 @db.SmallInt
+  isLooping       Boolean             @default(false)
+  priority        Int                 @default(1) @db.SmallInt
+  
+  // Relations
+  companion       AICompanion         @relation(fields: [companionId], references: [id])
+  
+  @@index([companionId, animationType])
+  @@map("companion_animations")
+}
+
+// 语音包
+model VoicePack {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companionId     String              @db.Uuid
+  packName        String              @db.VarChar(100)
+  language        String              @db.VarChar(10)
+  voiceStyle      String              @db.VarChar(20)
+  price           Int                 @default(0) @db.SmallInt
+  sampleUrl       String?             @db.VarChar(500)
+  isDefault       Boolean             @default(false)
+  isActive        Boolean             @default(true)
+  
+  // Relations
+  companion       AICompanion         @relation(fields: [companionId], references: [id])
+  
+  @@index([companionId])
+  @@map("voice_packs")
+}
+
+// 台球室场景
+model PoolHallScene {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String              @db.VarChar(100)
+  nameLocalized   Json                @db.JsonB
+  description     Json                @db.JsonB
+  backgroundUrl   String              @db.VarChar(500)
+  ambientSound    String?             @db.VarChar(500)
+  lightingMood    String              @db.VarChar(20)
+  maxCompanions   Int                 @default(3) @db.SmallInt
+  unlockLevel     Int                 @default(1) @db.SmallInt
+  price           Int                 @default(0) @db.SmallInt
+  isActive        Boolean             @default(true)
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  @@map("pool_hall_scenes")
+}
+
+// 智慧币系统
+model WisdomCoin {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String              @unique @db.Uuid
+  balance         Int                 @default(1000)
+  totalEarned     Int                 @default(1000)
+  totalSpent      Int                 @default(0)
+  
+  updatedAt       DateTime            @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    CoinTransaction[]
+  
+  @@index([userId])
+  @@map("wisdom_coins")
+}
+
+// 币交易记录
+model CoinTransaction {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String              @db.Uuid
+  amount          Int                 // 正数为获得，负数为消费
+  transactionType String              @db.VarChar(20)
+  description     String              @db.VarChar(200)
+  metadata        Json?               @db.JsonB
+  
+  createdAt       DateTime            @default(now()) @db.Timestamp(3)
+  
+  // Relations
+  wisdomCoin      WisdomCoin          @relation(fields: [userId], references: [userId])
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@map("coin_transactions")
+}
+
+// ==========================================================================
+// AI对手系统 - AI Opponent System
+// ==========================================================================
+
+// AI对手配置
+model Opponent {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String           @db.VarChar(100)
+  style           String           @db.VarChar(30)
+  difficulty      String           @db.VarChar(20)
+  winRate         Int              @default(50) @db.SmallInt
+  description     String           @db.Text
+  avatar          String           @db.VarChar(100)
+  
+  // 打法统计
+  vpip            Float            @default(25.0) @db.DoublePrecision
+  pfr             Float            @default(18.0) @db.DoublePrecision
+  af              Float            @default(2.5) @db.DoublePrecision
+  threeBet        Float            @default(7.0) @db.DoublePrecision
+  
+  // 行为模式
+  bluffFrequency  Float            @default(15.0) @db.DoublePrecision
+  tiltTendency    Float            @default(10.0) @db.DoublePrecision
+  adaptability    Float            @default(50.0) @db.DoublePrecision
+  
+  isActive        Boolean          @default(true)
+  requiredLevel   Int              @default(1) @db.SmallInt
+  unlockPrice     Int              @default(0) @db.SmallInt
+  
+  createdAt       DateTime         @default(now()) @db.Timestamp(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  gameSessions    GameSession[]
+  
+  @@index([difficulty])
+  @@index([style])
+  @@index([isActive])
+  @@map("opponents")
+}
+
+// ==========================================================================
+// 排行榜系统 - Leaderboard System
+// ==========================================================================
+
+// 实时排行榜
+model LeaderboardEntry {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String           @db.Uuid
+  period          String           @db.VarChar(20) // daily, weekly, monthly, all-time
+  category        String           @db.VarChar(30) // winRate, profit, hands, achievements
+  score           Float            @db.DoublePrecision
+  rank            Int              @db.SmallInt
+  metadata        Json?            @db.JsonB
+  periodStart     DateTime         @db.Timestamp(3)
+  periodEnd       DateTime         @db.Timestamp(3)
+  
+  updatedAt       DateTime         @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  user            User             @relation(fields: [userId], references: [id])
+  
+  @@unique([userId, period, category, periodStart])
+  @@index([period, category, rank])
+  @@index([userId])
+  @@index([updatedAt])
+  @@map("leaderboard_entries")
+}
+
+// 动态对话模板
+model DialogueTemplate {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companionId     String?          @db.Uuid
+  context         String           @db.VarChar(50)
+  mood            String?          @db.VarChar(20)
+  template        String           @db.Text
+  weight          Int              @default(100) @db.SmallInt
+  requiredLevel   Int              @default(1) @db.SmallInt
+  isActive        Boolean          @default(true)
+  
+  companion       AICompanion?     @relation(fields: [companionId], references: [id])
+  
+  @@index([companionId, context])
+  @@index([context, mood])
+  @@map("dialogue_templates")
+}
+
+// ==========================================================================
+// 技能测试系统 - Skill Test System
+// ==========================================================================
+
+// 测试场景
+model TestScenario {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category      String   @db.VarChar(20) // preflop, flop, turn, river
+  difficulty    Int      @db.SmallInt // 1-5
+  position      String   @db.VarChar(10) // UTG, MP, CO, BTN, SB, BB
+  stackSize     Int      @db.SmallInt // BB depth
+  
+  // 场景数据
+  situation     Json     @db.JsonB // 完整场景数据
+  
+  // GTO解决方案
+  gtoSolution   Json     @db.JsonB // GTO最优解
+  
+  // 元数据
+  tags          Json     @default("[]") @db.JsonB // ["3bet-pot", "draw-heavy"]
+  isActive      Boolean  @default(true)
+  
+  createdAt     DateTime @default(now()) @db.Timestamp(3)
+  updatedAt     DateTime @updatedAt @db.Timestamp(3)
+  
+  // Relations
+  testResults   TestResult[]
+  
+  @@index([category, difficulty])
+  @@index([position])
+  @@index([isActive])
+  @@map("test_scenarios")
+}
+
+// 测试会话
+model TestSession {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String   @db.Uuid
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  testType         String   @db.VarChar(20) // quick, standard, deep
+  status           String   @db.VarChar(20) // in_progress, completed, abandoned
+  
+  // 评分
+  totalScore       Float    @default(0) @db.DoublePrecision
+  dimensionScores  Json     @db.JsonB // 六维度评分
+  
+  playerType       String?  @db.VarChar(10) // TAMS 4字母代码
+  playerTypeDesc   String?  @db.VarChar(100)
+  
+  // 排名影响
+  rankPointsBefore Int      @default(0) @db.SmallInt
+  rankPointsAfter  Int      @default(0) @db.SmallInt
+  rankChange       Int      @default(0) @db.SmallInt
+  
+  // 时间统计
+  timeSpent        Int      @default(0) // 总秒数
+  avgDecisionTime  Float    @default(0) @db.DoublePrecision
+  
+  // 结果
+  detailedResults  Json     @db.JsonB // 详细结果数组
+  bestDecisions    Json     @db.JsonB // 最佳决策
+  worstDecisions   Json     @db.JsonB // 最差决策
+  
+  startedAt        DateTime @default(now()) @db.Timestamp(3)
+  completedAt      DateTime? @db.Timestamp(3)
+  
+  // Relations
+  testResults      TestResult[]
+  
+  @@index([userId, status])
+  @@index([completedAt])
+  @@map("test_sessions")
+}
+
+// 测试结果
+model TestResult {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId       String       @db.Uuid
+  session         TestSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scenarioId      String       @db.Uuid
+  scenario        TestScenario @relation(fields: [scenarioId], references: [id])
+  
+  questionNumber  Int          @db.SmallInt
+  
+  // 用户决策
+  userAction      String       @db.VarChar(20)
+  userAmount      Float?       @db.DoublePrecision
+  timeSpent       Int          @db.SmallInt // 秒
+  
+  // 评估
+  gtoAction       String       @db.VarChar(20)
+  gtoAmount       Float?       @db.DoublePrecision
+  evLoss          Float        @db.DoublePrecision
+  score           Float        @db.DoublePrecision // 0-100分
+  
+  // 分类
+  dimension       String       @db.VarChar(20)
+  feedback        Json         @db.JsonB
+  
+  createdAt       DateTime     @default(now()) @db.Timestamp(3)
+  
+  @@index([sessionId, questionNumber])
+  @@index([scenarioId])
+  @@map("test_results")
+}
+
+// 天梯排名系统
+model LadderRank {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @unique @db.Uuid
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 当前排名
+  currentRank     String   @db.VarChar(20) // bronze, silver, gold, etc.
+  rankPoints      Int      @default(1000) @db.SmallInt // ELO积分
+  
+  // 统计
+  season          Int      @default(1) @db.SmallInt
+  totalTests      Int      @default(0) @db.SmallInt
+  bestScore       Float    @default(0) @db.DoublePrecision
+  avgScore        Float    @default(0) @db.DoublePrecision
+  winStreak       Int      @default(0) @db.SmallInt
+  
+  // 技能档案
+  bestDimension   String?  @db.VarChar(20)
+  weakestDimension String? @db.VarChar(20)
+  playerType      String?  @db.VarChar(10)
+  
+  // 百分位
+  globalPercentile Float   @default(50) @db.DoublePrecision
+  rankPercentile   Float   @default(50) @db.DoublePrecision
+  
+  // 历史
+  peakRank        String   @default("bronze") @db.VarChar(20)
+  peakPoints      Int      @default(1000) @db.SmallInt
+  lastTestAt      DateTime? @db.Timestamp(3)
+  
+  createdAt       DateTime @default(now()) @db.Timestamp(3)
+  updatedAt       DateTime @updatedAt @db.Timestamp(3)
+  
+  @@index([rankPoints])
+  @@index([season, rankPoints])
+  @@map("ladder_ranks")
+}
+
+// ==========================================================================
+// 枚举定义 - Enum Definitions
+// ==========================================================================
+
+enum Street {
+  PREFLOP
+  FLOP
+  TURN
+  RIVER
+  SHOWDOWN
+}
+
+enum Role {
+  USER
+  PREMIUM
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum SessionType {
+  CASH
+  TOURNAMENT
+  TRAINING
+  SKILL_TEST
+}
+
+enum GameResult {
+  WIN
+  LOSS
+  DRAW
+}
+
+enum HandResult {
+  WIN
+  LOSS
+  TIE
+  FOLD
+}
+
+enum TrainingMode {
+  GTO
+  EXPLOITATIVE
+  MIXED
+  TOURNAMENT
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+  MASTER
+}
+
+enum AchievementCategory {
+  TRAINING
+  STATS
+  SPECIAL
+  MILESTONE
+  SOCIAL
+  COLLECTION
+}
+
+enum Rarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+  MYTHIC
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  SUBSCRIPTION
+  REWARD
+  PURCHASE
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  PROCESSING
+}

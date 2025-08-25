@@ -1,0 +1,145 @@
+# PokerIQ Pro Crontab Configuration
+# 
+# Installation:
+# 1. Copy this file: cp crontab.example /etc/cron.d/pokeriq
+# 2. Set permissions: chmod 644 /etc/cron.d/pokeriq
+# 3. Reload cron: systemctl reload cron
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=admin@pokeriq.com
+
+# Environment variables
+DATABASE_URL=postgresql://user:pass@localhost/pokeriq_prod
+BACKUP_BUCKET=pokeriq-backups
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# ============================================
+# Database Backups
+# ============================================
+
+# Daily database backup at 2:00 AM
+0 2 * * * root /var/www/pokeriq-pro/scripts/backup.sh -d >> /var/log/pokeriq/backup.log 2>&1
+
+# Weekly full backup (Sunday at 3:00 AM)
+0 3 * * 0 root /var/www/pokeriq-pro/scripts/backup.sh >> /var/log/pokeriq/backup.log 2>&1
+
+# Monthly extended backup with verification (1st of month at 4:00 AM)
+0 4 1 * * root /var/www/pokeriq-pro/scripts/backup.sh --verify --compress >> /var/log/pokeriq/backup.log 2>&1
+
+# ============================================
+# Cache Management
+# ============================================
+
+# Clear expired cache entries every hour
+0 * * * * www-data redis-cli EVAL "local keys = redis.call('keys', 'cache:*'); for i=1,#keys do local ttl = redis.call('ttl', keys[i]); if ttl == -1 then redis.call('expire', keys[i], 3600); end end; return #keys" 0
+
+# Flush old session data daily at 4:00 AM
+0 4 * * * www-data redis-cli --scan --pattern "session:*" | xargs -L 1 redis-cli expire 86400
+
+# ============================================
+# Log Rotation and Cleanup
+# ============================================
+
+# Rotate application logs daily at midnight
+0 0 * * * root /usr/sbin/logrotate /etc/logrotate.d/pokeriq --state /var/lib/logrotate/pokeriq.state
+
+# Clean up old log files weekly (keep 30 days)
+0 5 * * 0 root find /var/log/pokeriq -name "*.log" -mtime +30 -delete
+
+# Compress logs older than 7 days
+0 6 * * * root find /var/log/pokeriq -name "*.log" -mtime +7 -exec gzip {} \;
+
+# ============================================
+# Performance Monitoring
+# ============================================
+
+# Collect system metrics every 5 minutes
+*/5 * * * * www-data /var/www/pokeriq-pro/scripts/collect-metrics.sh
+
+# Generate daily performance report at 6:00 AM
+0 6 * * * root /var/www/pokeriq-pro/scripts/performance-report.sh --email admin@pokeriq.com
+
+# Check application health every 2 minutes
+*/2 * * * * www-data curl -f http://localhost:8820/api/health || systemctl restart pokeriq
+
+# ============================================
+# Security Tasks
+# ============================================
+
+# Run security audit weekly (Monday at 1:00 AM)
+0 1 * * 1 root npm audit --prefix /var/www/pokeriq-pro >> /var/log/pokeriq/security.log 2>&1
+
+# Update virus definitions daily (if ClamAV is installed)
+0 7 * * * root freshclam --quiet
+
+# Scan uploads directory for malware daily at 3:30 AM
+30 3 * * * root clamscan -r /var/www/pokeriq-pro/uploads --move=/var/quarantine --log=/var/log/pokeriq/clamscan.log
+
+# ============================================
+# Database Maintenance
+# ============================================
+
+# Vacuum and analyze PostgreSQL daily at 3:00 AM
+0 3 * * * postgres vacuumdb --all --analyze --quiet
+
+# Reindex database weekly (Sunday at 4:00 AM)
+0 4 * * 0 postgres reindexdb --all --quiet
+
+# Update statistics for query planner
+0 5 * * * postgres psql -d pokeriq_prod -c "ANALYZE;"
+
+# ============================================
+# Leaderboard and Statistics Updates
+# ============================================
+
+# Update hourly leaderboards
+0 * * * * www-data /var/www/pokeriq-pro/scripts/update-leaderboard.sh --type hourly
+
+# Update daily leaderboards at 00:05
+5 0 * * * www-data /var/www/pokeriq-pro/scripts/update-leaderboard.sh --type daily
+
+# Update weekly leaderboards (Monday at 00:10)
+10 0 * * 1 www-data /var/www/pokeriq-pro/scripts/update-leaderboard.sh --type weekly
+
+# Update monthly leaderboards (1st of month at 00:15)
+15 0 1 * * www-data /var/www/pokeriq-pro/scripts/update-leaderboard.sh --type monthly
+
+# Calculate user statistics daily at 1:00 AM
+0 1 * * * www-data node /var/www/pokeriq-pro/scripts/calculate-stats.js
+
+# ============================================
+# Cleanup Tasks
+# ============================================
+
+# Clean up orphaned sessions daily
+30 2 * * * www-data node /var/www/pokeriq-pro/scripts/cleanup-sessions.js
+
+# Remove old temporary files
+0 */6 * * * root find /tmp -name "pokeriq-*" -mtime +1 -delete
+
+# Clean up unverified accounts older than 30 days
+0 2 * * * www-data node /var/www/pokeriq-pro/scripts/cleanup-unverified.js
+
+# ============================================
+# Notification Tasks
+# ============================================
+
+# Send daily summary email to admins
+0 9 * * * www-data node /var/www/pokeriq-pro/scripts/daily-summary.js
+
+# Check and send achievement notifications every 30 minutes
+*/30 * * * * www-data node /var/www/pokeriq-pro/scripts/achievement-notifications.js
+
+# Send VIP expiry reminders daily at 10:00 AM
+0 10 * * * www-data node /var/www/pokeriq-pro/scripts/vip-reminders.js
+
+# ============================================
+# Development/Staging Only
+# ============================================
+
+# Sync production data to staging (only on staging server)
+# 0 1 * * * root /var/www/pokeriq-pro/scripts/sync-from-prod.sh
+
+# Generate test data (only in development)
+# 0 */4 * * * www-data node /var/www/pokeriq-pro/scripts/generate-test-data.js

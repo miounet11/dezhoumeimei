@@ -1,0 +1,32 @@
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# 复制package.json
+COPY package*.json ./
+RUN npm ci
+
+# 复制源代码并构建
+COPY . .
+RUN npm run build
+
+# 生产阶段
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=test
+
+# 复制构建产物
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# 暴露端口
+EXPOSE 3000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+CMD ["node", "server.js"]

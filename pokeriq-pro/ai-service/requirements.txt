@@ -1,0 +1,52 @@
+# FastAPI框架
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# 异步支持
+httpx==0.25.1
+aiofiles==23.2.1
+
+# 数据处理
+numpy==1.24.3
+pandas==2.0.3
+scipy==1.11.4
+
+# 机器学习
+scikit-learn==1.3.2
+joblib==1.3.2
+
+# 扑克相关
+treys==0.1.8  # 德州扑克手牌评估库
+
+# 数据验证
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 环境变量
+python-dotenv==1.0.0
+
+# CORS支持
+python-jose[cryptography]==3.3.0
+
+# 缓存和数据库
+redis==5.0.1
+redis[hiredis]==5.0.1  # 高性能Redis连接器
+
+# 日志
+loguru==0.7.2
+
+# 数学计算优化
+numba==0.58.1  # JIT编译器，加速CFR算法
+
+# 并发处理
+asyncio-throttle==1.0.2
+
+# 监控和性能
+psutil==5.9.6  # 系统资源监控
+memory-profiler==0.61.0  # 内存使用分析
+
+# 测试
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-benchmark==4.0.0  # 性能测试
