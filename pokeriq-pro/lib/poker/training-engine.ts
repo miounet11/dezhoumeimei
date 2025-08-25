@@ -941,4 +941,3 @@ export class TrainingEngine {
     return Math.floor(potSize * 0.5);
   }
 }
-}

@@ -1,1 +1,215 @@
-/**\n * Performance Optimization Configuration for PokerIQ Pro AI Training\n * 针对AI训练页面的性能优化配置\n */\n\n// 组件懒加载配置\nexport const LazyLoadingConfig = {\n  // 延迟加载非关键组件\n  deferredComponents: [\n    'PersonalizedRecommendations', // 个性化推荐可以延迟加载\n    'OnboardingTutorial',          // 引导教程按需加载\n    'GTOFeedbackPanel'             // GTO反馈面板在需要时加载\n  ],\n  \n  // 预加载关键组件\n  preloadComponents: [\n    'WelcomeInterface',            // 欢迎界面优先加载\n    'QuickTrainingInterface',      // 快速训练界面优先加载\n    'TrainingProgressPanel'        // 进展面板优先显示\n  ]\n};\n\n// 图片优化配置\nexport const ImageOptimizationConfig = {\n  // 使用WebP格式的图片\n  formats: ['webp', 'jpg', 'png'],\n  \n  // 响应式图片尺寸\n  sizes: {\n    mobile: '(max-width: 768px) 100vw',\n    tablet: '(max-width: 1024px) 50vw', \n    desktop: '25vw'\n  },\n  \n  // 图片质量设置\n  quality: {\n    high: 85,\n    medium: 70,\n    low: 50\n  }\n};\n\n// 缓存策略配置\nexport const CacheConfig = {\n  // 静态资源缓存（1小时）\n  staticAssets: {\n    maxAge: 3600,\n    staleWhileRevalidate: 86400\n  },\n  \n  // API数据缓存（5分钟）\n  apiData: {\n    maxAge: 300,\n    staleWhileRevalidate: 600\n  },\n  \n  // 用户技能数据缓存（10分钟）\n  skillData: {\n    maxAge: 600,\n    staleWhileRevalidate: 1200\n  }\n};\n\n// 代码分割配置\nexport const CodeSplittingConfig = {\n  // 路由级别的代码分割\n  routes: [\n    '/ai-training',\n    '/gto-training', \n    '/skill-test',\n    '/analytics'\n  ],\n  \n  // 组件级别的代码分割\n  components: {\n    // 训练相关组件\n    training: [\n      'QuickTrainingInterface',\n      'TrainingProgressPanel',\n      'GTOFeedbackPanel'\n    ],\n    \n    // 分析相关组件\n    analytics: [\n      'PersonalizedRecommendations',\n      'SkillAnalysisChart',\n      'PerformanceMetrics'\n    ],\n    \n    // 引导相关组件\n    onboarding: [\n      'OnboardingTutorial',\n      'TaskGuide',\n      'FeatureTour'\n    ]\n  }\n};\n\n// 预加载策略\nexport const PreloadingConfig = {\n  // 关键资源预加载\n  critical: [\n    '/api/user/skills',      // 技能数据\n    '/api/training/session', // 训练会话\n    '/fonts/inter.woff2'     // 关键字体\n  ],\n  \n  // 预期用户行为预加载\n  predictive: [\n    '/api/gto/analysis',     // 用户可能需要的GTO分析\n    '/api/recommendations',  // 个性化推荐\n    '/images/poker-cards'    // 扑克牌图片\n  ]\n};\n\n// 性能监控配置\nexport const PerformanceMonitoring = {\n  // Core Web Vitals目标\n  targets: {\n    LCP: 2.5,    // Largest Contentful Paint < 2.5s\n    FID: 100,    // First Input Delay < 100ms\n    CLS: 0.1,    // Cumulative Layout Shift < 0.1\n    TTFB: 800    // Time to First Byte < 800ms\n  },\n  \n  // 关键用户指标\n  userMetrics: {\n    timeToInteractive: 3000,      // 页面可交互时间 < 3s\n    trainingSes1ionStart: 2000,   // 训练开始时间 < 2s  \n    gtoFeedbackDisplay: 500,      // GTO反馈显示时间 < 500ms\n    skillProgressUpdate: 200      // 技能进展更新 < 200ms\n  }\n};\n\n// 资源优化配置\nexport const ResourceOptimization = {\n  // CSS优化\n  css: {\n    minify: true,\n    purge: true,\n    critical: [\n      'layout.css',\n      'typography.css',\n      'components.css'\n    ]\n  },\n  \n  // JavaScript优化\n  javascript: {\n    minify: true,\n    treeshaking: true,\n    compression: 'gzip',\n    splitChunks: {\n      vendor: true,\n      commons: true,\n      async: true\n    }\n  },\n  \n  // 字体优化\n  fonts: {\n    preload: ['Inter-Regular.woff2', 'Inter-Bold.woff2'],\n    display: 'swap',\n    subset: 'latin'\n  }\n};\n\n// 移动端优化配置\nexport const MobileOptimization = {\n  // 触摸优化\n  touch: {\n    minTouchTargetSize: 44,  // 最小触摸目标尺寸44px\n    gestureSupport: true,    // 支持手势操作\n    fastClick: true         // 快速点击响应\n  },\n  \n  // 视口优化\n  viewport: {\n    width: 'device-width',\n    initialScale: 1,\n    maximumScale: 5,\n    userScalable: true\n  },\n  \n  // 网络优化\n  network: {\n    serviceWorker: true,     // 启用Service Worker\n    offlineSupport: false,   // 暂不支持离线（训练需要实时数据）\n    dataCompression: true    // 数据压缩\n  }\n};\n\n// 实时性能优化\nexport const RealTimeOptimization = {\n  // WebSocket连接优化\n  websocket: {\n    reconnectInterval: 1000,\n    maxReconnectAttempts: 5,\n    heartbeatInterval: 30000\n  },\n  \n  // 状态更新优化\n  stateUpdates: {\n    debounceMs: 300,         // 防抖延迟300ms\n    batchUpdates: true,      // 批量更新状态\n    shouldComponentUpdate: true // 智能组件更新\n  },\n  \n  // 动画优化\n  animations: {\n    useGPU: true,            // 使用GPU加速\n    reducedMotion: true,     // 支持减少动画偏好\n    fps: 60                  // 目标帧率60fps\n  }\n};
+/**
+ * Performance Optimization Configuration for PokerIQ Pro AI Training
+ * 针对AI训练页面的性能优化配置
+ */
+
+// 组件懒加载配置
+export const LazyLoadingConfig = {
+  // 延迟加载非关键组件
+  deferredComponents: [
+    'PersonalizedRecommendations', // 个性化推荐可以延迟加载
+    'OnboardingTutorial',          // 引导教程按需加载
+    'GTOFeedbackPanel'             // GTO反馈面板在需要时加载
+  ],
+  
+  // 预加载关键组件
+  preloadComponents: [
+    'WelcomeInterface',            // 欢迎界面优先加载
+    'QuickTrainingInterface',      // 快速训练界面优先加载
+    'TrainingProgressPanel'        // 进展面板优先显示
+  ]
+};
+
+// 图片优化配置
+export const ImageOptimizationConfig = {
+  // 使用WebP格式的图片
+  formats: ['webp', 'jpg', 'png'],
+  
+  // 响应式图片尺寸
+  sizes: {
+    mobile: '(max-width: 768px) 100vw',
+    tablet: '(max-width: 1024px) 50vw', 
+    desktop: '25vw'
+  },
+  
+  // 图片质量设置
+  quality: {
+    high: 85,
+    medium: 70,
+    low: 50
+  }
+};
+
+// 缓存策略配置
+export const CacheConfig = {
+  // 静态资源缓存（1小时）
+  staticAssets: {
+    maxAge: 3600,
+    staleWhileRevalidate: 86400
+  },
+  
+  // API数据缓存（5分钟）
+  apiData: {
+    maxAge: 300,
+    staleWhileRevalidate: 600
+  },
+  
+  // 用户技能数据缓存（10分钟）
+  skillData: {
+    maxAge: 600,
+    staleWhileRevalidate: 1200
+  }
+};
+
+// 代码分割配置
+export const CodeSplittingConfig = {
+  // 路由级别的代码分割
+  routes: [
+    '/ai-training',
+    '/gto-training', 
+    '/skill-test',
+    '/analytics'
+  ],
+  
+  // 组件级别的代码分割
+  components: {
+    // 训练相关组件
+    training: [
+      'QuickTrainingInterface',
+      'TrainingProgressPanel',
+      'GTOFeedbackPanel'
+    ],
+    
+    // 分析相关组件
+    analytics: [
+      'PersonalizedRecommendations',
+      'SkillAnalysisChart',
+      'PerformanceMetrics'
+    ],
+    
+    // 引导相关组件
+    onboarding: [
+      'OnboardingTutorial',
+      'TaskGuide',
+      'FeatureTour'
+    ]
+  }
+};
+
+// 预加载策略
+export const PreloadingConfig = {
+  // 关键资源预加载
+  critical: [
+    '/api/user/skills',      // 技能数据
+    '/api/training/session', // 训练会话
+    '/fonts/inter.woff2'     // 关键字体
+  ],
+  
+  // 预期用户行为预加载
+  predictive: [
+    '/api/gto/analysis',     // 用户可能需要的GTO分析
+    '/api/recommendations',  // 个性化推荐
+    '/images/poker-cards'    // 扑克牌图片
+  ]
+};
+
+// 性能监控配置
+export const PerformanceMonitoring = {
+  // Core Web Vitals目标
+  targets: {
+    LCP: 2.5,    // Largest Contentful Paint < 2.5s
+    FID: 100,    // First Input Delay < 100ms
+    CLS: 0.1,    // Cumulative Layout Shift < 0.1
+    TTFB: 800    // Time to First Byte < 800ms
+  },
+  
+  // 关键用户指标
+  userMetrics: {
+    timeToInteractive: 3000,      // 页面可交互时间 < 3s
+    trainingSes1ionStart: 2000,   // 训练开始时间 < 2s  
+    gtoFeedbackDisplay: 500,      // GTO反馈显示时间 < 500ms
+    skillProgressUpdate: 200      // 技能进展更新 < 200ms
+  }
+};
+
+// 资源优化配置
+export const ResourceOptimization = {
+  // CSS优化
+  css: {
+    minify: true,
+    purge: true,
+    critical: [
+      'layout.css',
+      'typography.css',
+      'components.css'
+    ]
+  },
+  
+  // JavaScript优化
+  javascript: {
+    minify: true,
+    treeshaking: true,
+    compression: 'gzip',
+    splitChunks: {
+      vendor: true,
+      commons: true,
+      async: true
+    }
+  },
+  
+  // 字体优化
+  fonts: {
+    preload: ['Inter-Regular.woff2', 'Inter-Bold.woff2'],
+    display: 'swap',
+    subset: 'latin'
+  }
+};
+
+// 移动端优化配置
+export const MobileOptimization = {
+  // 触摸优化
+  touch: {
+    minTouchTargetSize: 44,  // 最小触摸目标尺寸44px
+    gestureSupport: true,    // 支持手势操作
+    fastClick: true         // 快速点击响应
+  },
+  
+  // 视口优化
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true
+  },
+  
+  // 网络优化
+  network: {
+    serviceWorker: true,     // 启用Service Worker
+    offlineSupport: false,   // 暂不支持离线（训练需要实时数据）
+    dataCompression: true    // 数据压缩
+  }
+};
+
+// 实时性能优化
+export const RealTimeOptimization = {
+  // WebSocket连接优化
+  websocket: {
+    reconnectInterval: 1000,
+    maxReconnectAttempts: 5,
+    heartbeatInterval: 30000
+  },
+  
+  // 状态更新优化
+  stateUpdates: {
+    debounceMs: 300,         // 防抖延迟300ms
+    batchUpdates: true,      // 批量更新状态
+    shouldComponentUpdate: true // 智能组件更新
+  },
+  
+  // 动画优化
+  animations: {
+    useGPU: true,            // 使用GPU加速
+    reducedMotion: true,     // 支持减少动画偏好
+    fps: 60                  // 目标帧率60fps
+  }
+};
