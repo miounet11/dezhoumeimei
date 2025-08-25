@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>德州扑克AI训练中心 - 完整演示</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        /* 牌桌 */
+        .poker-table {
+            background: radial-gradient(ellipse at center, #2d5a2d, #1a3d1a);
+            border-radius: 150px;
+            padding: 40px;
+            margin: 30px auto;
+            position: relative;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+        
+        .community-cards {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .phase-indicator {
+            color: #ffd700;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .pot-size {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .cards-container {
+            display: inline-flex;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+        
+        .card {
+            width: 60px;
+            height: 90px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .card.red { color: #e53e3e; }
+        .card.black { color: #1a202c; }
+        
+        /* 玩家座位 */
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .player-seat {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .player-seat.active {
+            box-shadow: 0 0 20px #ffd700;
+            transform: scale(1.05);
+        }
+        
+        .player-seat.hero {
+            border: 3px solid #48bb78;
+        }
+        
+        .player-seat.folded {
+            opacity: 0.5;
+        }
+        
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .player-name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .position-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .position-btn { background: #3182ce; }
+        .position-sb { background: #ecc94b; }
+        .position-bb { background: #e53e3e; }
+        .position-utg { background: #805ad5; }
+        .position-mp { background: #38a169; }
+        .position-co { background: #ed8936; }
+        
+        .player-chips {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .player-cards {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .player-card {
+            width: 40px;
+            height: 60px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .player-bet {
+            color: #3182ce;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        /* GTO反馈 */
+        .gto-feedback {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #333;
+        }
+        
+        .gto-feedback.correct {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+        }
+        
+        .gto-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .gto-message {
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        
+        .gto-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .gto-stat {
+            text-align: center;
+        }
+        
+        .gto-stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .gto-stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        /* 操作按钮 */
+        .action-panel {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .action-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .action-btn {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .btn-fold { background: #f56565; color: white; }
+        .btn-check { background: #4299e1; color: white; }
+        .btn-call { background: #48bb78; color: white; }
+        .btn-bet { background: #ed8936; color: white; }
+        .btn-raise { background: #9f7aea; color: white; }
+        .btn-allin { background: #e53e3e; color: white; }
+        
+        .bet-slider {
+            margin: 20px 0;
+        }
+        
+        .bet-slider input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .bet-presets {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .preset-btn {
+            padding: 8px 16px;
+            background: #e2e8f0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .preset-btn:hover {
+            background: #cbd5e0;
+        }
+        
+        .confirm-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .confirm-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* 消息提示 */
+        .message {
+            background: #fef5e7;
+            border-left: 4px solid #f39c12;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-size: 16px;
+            color: #856404;
+        }
+        
+        /* 开始按钮 */
+        .start-screen {
+            text-align: center;
+            padding: 60px;
+        }
+        
+        .start-btn {
+            padding: 20px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 德州扑克AI训练中心</h1>
+        <p class="subtitle">与智能AI对战，实时获得GTO策略反馈，提升你的牌技</p>
+        
+        <!-- 训练统计 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">已玩手数</div>
+                <div class="stat-value" id="handsPlayed">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">正确率</div>
+                <div class="stat-value" id="accuracy">0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">EV损失</div>
+                <div class="stat-value" id="evLoss">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总盈亏</div>
+                <div class="stat-value" id="winnings">0</div>
+            </div>
+        </div>
+        
+        <!-- 游戏区域 -->
+        <div id="gameArea">
+            <!-- 开始界面 -->
+            <div id="startScreen" class="start-screen">
+                <button class="start-btn" onclick="startNewGame()">开始训练</button>
+            </div>
+            
+            <!-- 游戏界面 -->
+            <div id="gameScreen" style="display: none;">
+                <!-- 牌桌 -->
+                <div class="poker-table">
+                    <!-- 公共牌 -->
+                    <div class="community-cards">
+                        <div class="phase-indicator" id="gamePhase">等待开始</div>
+                        <div class="pot-size">底池: <span id="potSize">0</span></div>
+                        <div class="cards-container" id="communityCards">
+                            <!-- 公共牌将在这里显示 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 玩家座位 -->
+                    <div class="players-grid" id="playersGrid">
+                        <!-- 玩家座位将在这里生成 -->
+                    </div>
+                </div>
+                
+                <!-- 消息提示 -->
+                <div id="messageArea"></div>
+                
+                <!-- GTO反馈 -->
+                <div id="gtoFeedback" style="display: none;"></div>
+                
+                <!-- 操作面板 -->
+                <div id="actionPanel" class="action-panel" style="display: none;">
+                    <div class="action-title">轮到你了！请选择操作：</div>
+                    <div class="action-buttons">
+                        <button class="action-btn btn-fold" onclick="selectAction('FOLD')">弃牌</button>
+                        <button class="action-btn btn-check" onclick="selectAction('CHECK')">过牌</button>
+                        <button class="action-btn btn-call" onclick="selectAction('CALL')">跟注</button>
+                        <button class="action-btn btn-bet" onclick="selectAction('BET')">下注</button>
+                        <button class="action-btn btn-raise" onclick="selectAction('RAISE')">加注</button>
+                        <button class="action-btn btn-allin" onclick="selectAction('ALL_IN')">全下</button>
+                    </div>
+                    
+                    <div id="betControls" class="bet-slider" style="display: none;">
+                        <label>下注金额: <span id="betAmount">0</span></label>
+                        <input type="range" id="betSlider" min="0" max="200" value="0" oninput="updateBetAmount(this.value)">
+                        <div class="bet-presets">
+                            <button class="preset-btn" onclick="setBetPreset(0.33)">1/3底池</button>
+                            <button class="preset-btn" onclick="setBetPreset(0.5)">1/2底池</button>
+                            <button class="preset-btn" onclick="setBetPreset(0.75)">3/4底池</button>
+                            <button class="preset-btn" onclick="setBetPreset(1)">底池</button>
+                        </div>
+                    </div>
+                    
+                    <button class="confirm-btn" onclick="confirmAction()">确认操作</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 游戏状态
+        let gameState = {
+            players: [],
+            communityCards: [],
+            pot: 0,
+            currentBet: 0,
+            gamePhase: 'PREFLOP',
+            isHeroTurn: false,
+            heroPosition: 2
+        };
+        
+        let selectedAction = '';
+        let betAmount = 0;
+        let stats = {
+            handsPlayed: 0,
+            correctDecisions: 0,
+            totalEVLoss: 0,
+            winnings: 0
+        };
+        
+        // 开始新游戏
+        function startNewGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+            
+            // 初始化玩家
+            initializePlayers();
+            
+            // 开始新手牌
+            startNewHand();
+        }
+        
+        // 初始化玩家
+        function initializePlayers() {
+            const playerTypes = ['紧凶型', '松凶型', '岩石型', '鱼型', 'GTO型', '标准型'];
+            const positions = ['UTG', 'UTG+1', 'MP', 'CO', 'BTN', 'SB'];
+            
+            gameState.players = [];
+            for (let i = 0; i < 6; i++) {
+                gameState.players.push({
+                    id: `player-${i}`,
+                    name: i === gameState.heroPosition ? '你' : playerTypes[i],
+                    position: positions[i],
+                    chips: 200,
+                    cards: [],
+                    folded: false,
+                    currentBet: 0,
+                    isHero: i === gameState.heroPosition
+                });
+            }
+            
+            renderPlayers();
+        }
+        
+        // 开始新手牌
+        function startNewHand() {
+            // 重置游戏状态
+            gameState.communityCards = [];
+            gameState.pot = 0;
+            gameState.currentBet = 2; // 大盲注
+            gameState.gamePhase = 'PREFLOP';
+            
+            // 重置玩家状态
+            gameState.players.forEach(player => {
+                player.folded = false;
+                player.currentBet = 0;
+                player.cards = generateRandomCards(2);
+            });
+            
+            // 设置盲注
+            gameState.players[4].currentBet = 1; // SB
+            gameState.players[5].currentBet = 2; // BB
+            gameState.pot = 3;
+            
+            showMessage('新的一手牌开始！');
+            updateDisplay();
+            
+            // 开始行动
+            setTimeout(() => processNextAction(), 1000);
+        }
+        
+        // 生成随机牌
+        function generateRandomCards(count) {
+            const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+            const suits = ['♠', '♥', '♦', '♣'];
+            const cards = [];
+            
+            for (let i = 0; i < count; i++) {
+                const rank = ranks[Math.floor(Math.random() * ranks.length)];
+                const suit = suits[Math.floor(Math.random() * suits.length)];
+                cards.push({ rank, suit });
+            }
+            
+            return cards;
+        }
+        
+        // 处理下一个行动
+        function processNextAction() {
+            // 检查是否应该进入下一阶段
+            if (shouldAdvancePhase()) {
+                advancePhase();
+                return;
+            }
+            
+            // 找到下一个行动玩家
+            const activePlayer = getNextActivePlayer();
+            if (!activePlayer) {
+                showdown();
+                return;
+            }
+            
+            if (activePlayer.isHero) {
+                // 玩家回合
+                gameState.isHeroTurn = true;
+                document.getElementById('actionPanel').style.display = 'block';
+                showMessage('轮到你了！请选择你的操作。');
+            } else {
+                // AI回合
+                setTimeout(() => processAIAction(activePlayer), 1000);
+            }
+            
+            updateDisplay();
+        }
+        
+        // AI行动
+        function processAIAction(player) {
+            const actions = ['FOLD', 'CHECK', 'CALL', 'RAISE'];
+            const randomAction = actions[Math.floor(Math.random() * actions.length)];
+            
+            let message = '';
+            
+            switch(randomAction) {
+                case 'FOLD':
+                    player.folded = true;
+                    message = `${player.name} 弃牌`;
+                    break;
+                case 'CHECK':
+                    if (gameState.currentBet === player.currentBet) {
+                        message = `${player.name} 过牌`;
+                    } else {
+                        // 改为跟注
+                        const callAmount = gameState.currentBet - player.currentBet;
+                        player.chips -= callAmount;
+                        player.currentBet = gameState.currentBet;
+                        gameState.pot += callAmount;
+                        message = `${player.name} 跟注 ${callAmount}`;
+                    }
+                    break;
+                case 'CALL':
+                    const callAmount = gameState.currentBet - player.currentBet;
+                    player.chips -= callAmount;
+                    player.currentBet = gameState.currentBet;
+                    gameState.pot += callAmount;
+                    message = `${player.name} 跟注 ${callAmount}`;
+                    break;
+                case 'RAISE':
+                    const raiseAmount = gameState.currentBet * 2;
+                    player.chips -= raiseAmount;
+                    player.currentBet += raiseAmount;
+                    gameState.currentBet = player.currentBet;
+                    gameState.pot += raiseAmount;
+                    message = `${player.name} 加注到 ${player.currentBet}`;
+                    break;
+            }
+            
+            showMessage(message);
+            updateDisplay();
+            
+            setTimeout(() => processNextAction(), 1500);
+        }
+        
+        // 选择操作
+        function selectAction(action) {
+            selectedAction = action;
+            
+            // 显示下注控制
+            if (action === 'BET' || action === 'RAISE') {
+                document.getElementById('betControls').style.display = 'block';
+                const hero = gameState.players[gameState.heroPosition];
+                document.getElementById('betSlider').max = hero.chips;
+                document.getElementById('betSlider').min = gameState.currentBet * 2;
+                updateBetAmount(gameState.currentBet * 2);
+            } else {
+                document.getElementById('betControls').style.display = 'none';
+            }
+        }
+        
+        // 更新下注金额
+        function updateBetAmount(value) {
+            betAmount = parseInt(value);
+            document.getElementById('betAmount').textContent = betAmount;
+        }
+        
+        // 设置下注预设
+        function setBetPreset(multiplier) {
+            const amount = Math.floor(gameState.pot * multiplier);
+            document.getElementById('betSlider').value = amount;
+            updateBetAmount(amount);
+        }
+        
+        // 确认操作
+        function confirmAction() {
+            const hero = gameState.players[gameState.heroPosition];
+            let message = '';
+            
+            switch(selectedAction) {
+                case 'FOLD':
+                    hero.folded = true;
+                    message = '你弃牌了';
+                    break;
+                case 'CHECK':
+                    message = '你过牌';
+                    break;
+                case 'CALL':
+                    const callAmount = gameState.currentBet - hero.currentBet;
+                    hero.chips -= callAmount;
+                    hero.currentBet = gameState.currentBet;
+                    gameState.pot += callAmount;
+                    message = `你跟注 ${callAmount}`;
+                    break;
+                case 'BET':
+                case 'RAISE':
+                    hero.chips -= betAmount;
+                    hero.currentBet += betAmount;
+                    gameState.currentBet = hero.currentBet;
+                    gameState.pot += betAmount;
+                    message = `你${selectedAction === 'BET' ? '下注' : '加注'} ${betAmount}`;
+                    break;
+                case 'ALL_IN':
+                    gameState.pot += hero.chips;
+                    hero.currentBet += hero.chips;
+                    gameState.currentBet = Math.max(gameState.currentBet, hero.currentBet);
+                    hero.chips = 0;
+                    message = '你全下了！';
+                    break;
+            }
+            
+            // 显示GTO反馈
+            showGTOFeedback(selectedAction);
+            
+            // 更新统计
+            stats.handsPlayed++;
+            updateStats();
+            
+            showMessage(message);
+            document.getElementById('actionPanel').style.display = 'none';
+            gameState.isHeroTurn = false;
+            
+            updateDisplay();
+            
+            setTimeout(() => processNextAction(), 1500);
+        }
+        
+        // 显示GTO反馈
+        function showGTOFeedback(action) {
+            const isCorrect = Math.random() > 0.5; // 简化：随机判断是否正确
+            const optimalAction = isCorrect ? action : 'CHECK';
+            const equity = Math.floor(Math.random() * 100);
+            const potOdds = Math.floor(gameState.currentBet / (gameState.pot + gameState.currentBet) * 100);
+            
+            if (isCorrect) {
+                stats.correctDecisions++;
+            } else {
+                stats.totalEVLoss += Math.random() * 5;
+            }
+            
+            const feedbackHTML = `
+                <div class="gto-feedback ${isCorrect ? 'correct' : ''}">
+                    <div class="gto-title">GTO分析</div>
+                    <div class="gto-message">
+                        ${isCorrect ? '✅ 正确！这是GTO推荐的打法。' : `⚠️ GTO建议${translateAction(optimalAction)}。`}
+                    </div>
+                    <div class="gto-stats">
+                        <div class="gto-stat">
+                            <div class="gto-stat-label">你的动作</div>
+                            <div class="gto-stat-value">${translateAction(action)}</div>
+                        </div>
+                        <div class="gto-stat">
+                            <div class="gto-stat-label">最优动作</div>
+                            <div class="gto-stat-value">${translateAction(optimalAction)}</div>
+                        </div>
+                        <div class="gto-stat">
+                            <div class="gto-stat-label">胜率</div>
+                            <div class="gto-stat-value">${equity}%</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('gtoFeedback').innerHTML = feedbackHTML;
+            document.getElementById('gtoFeedback').style.display = 'block';
+            
+            setTimeout(() => {
+                document.getElementById('gtoFeedback').style.display = 'none';
+            }, 5000);
+        }
+        
+        // 翻译动作
+        function translateAction(action) {
+            const translations = {
+                'FOLD': '弃牌',
+                'CHECK': '过牌',
+                'CALL': '跟注',
+                'BET': '下注',
+                'RAISE': '加注',
+                'ALL_IN': '全下'
+            };
+            return translations[action] || action;
+        }
+        
+        // 检查是否应该进入下一阶段
+        function shouldAdvancePhase() {
+            const activePlayers = gameState.players.filter(p => !p.folded);
+            if (activePlayers.length <= 1) return true;
+            
+            // 简化：检查是否所有玩家都已行动
+            return activePlayers.every(p => p.currentBet === gameState.currentBet);
+        }
+        
+        // 进入下一阶段
+        function advancePhase() {
+            switch(gameState.gamePhase) {
+                case 'PREFLOP':
+                    gameState.gamePhase = 'FLOP';
+                    gameState.communityCards = generateRandomCards(3);
+                    showMessage('--- 翻牌 ---');
+                    break;
+                case 'FLOP':
+                    gameState.gamePhase = 'TURN';
+                    gameState.communityCards.push(...generateRandomCards(1));
+                    showMessage('--- 转牌 ---');
+                    break;
+                case 'TURN':
+                    gameState.gamePhase = 'RIVER';
+                    gameState.communityCards.push(...generateRandomCards(1));
+                    showMessage('--- 河牌 ---');
+                    break;
+                case 'RIVER':
+                    showdown();
+                    return;
+            }
+            
+            // 重置当前回合下注
+            gameState.players.forEach(p => p.currentBet = 0);
+            gameState.currentBet = 0;
+            
+            updateDisplay();
+            setTimeout(() => processNextAction(), 1500);
+        }
+        
+        // 摊牌
+        function showdown() {
+            const activePlayers = gameState.players.filter(p => !p.folded);
+            const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+            
+            winner.chips += gameState.pot;
+            
+            if (winner.isHero) {
+                stats.winnings += gameState.pot;
+                showMessage(`🎉 恭喜！你赢得了 ${gameState.pot} 筹码！`);
+            } else {
+                stats.winnings -= gameState.pot / activePlayers.length;
+                showMessage(`${winner.name} 赢得了 ${gameState.pot} 筹码`);
+            }
+            
+            updateStats();
+            
+            setTimeout(() => {
+                if (confirm('继续下一手牌？')) {
+                    startNewHand();
+                }
+            }, 3000);
+        }
+        
+        // 获取下一个行动玩家
+        function getNextActivePlayer() {
+            // 简化：返回第一个未弃牌且未全下的玩家
+            return gameState.players.find(p => !p.folded && p.chips > 0);
+        }
+        
+        // 渲染玩家
+        function renderPlayers() {
+            const grid = document.getElementById('playersGrid');
+            grid.innerHTML = '';
+            
+            gameState.players.forEach(player => {
+                const isActive = gameState.isHeroTurn && player.isHero;
+                const positionClass = `position-${player.position.toLowerCase().replace('+', '')}`;
+                
+                const playerHTML = `
+                    <div class="player-seat ${player.isHero ? 'hero' : ''} ${player.folded ? 'folded' : ''} ${isActive ? 'active' : ''}">
+                        <div class="player-header">
+                            <span class="player-name">${player.name}</span>
+                            <span class="position-badge ${positionClass}">${player.position}</span>
+                        </div>
+                        <div class="player-chips">筹码: ${player.chips}</div>
+                        ${player.isHero && player.cards.length > 0 ? `
+                            <div class="player-cards">
+                                ${player.cards.map(card => `
+                                    <div class="player-card ${(card.suit === '♥' || card.suit === '♦') ? 'red' : 'black'}">
+                                        ${card.rank}${card.suit}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        ${player.currentBet > 0 ? `
+                            <div class="player-bet">下注: ${player.currentBet}</div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                grid.innerHTML += playerHTML;
+            });
+        }
+        
+        // 更新显示
+        function updateDisplay() {
+            // 更新阶段
+            const phaseMap = {
+                'PREFLOP': '翻牌前',
+                'FLOP': '翻牌',
+                'TURN': '转牌',
+                'RIVER': '河牌'
+            };
+            document.getElementById('gamePhase').textContent = phaseMap[gameState.gamePhase];
+            
+            // 更新底池
+            document.getElementById('potSize').textContent = gameState.pot;
+            
+            // 更新公共牌
+            const communityCardsDiv = document.getElementById('communityCards');
+            if (gameState.communityCards.length > 0) {
+                communityCardsDiv.innerHTML = gameState.communityCards.map(card => `
+                    <div class="card ${(card.suit === '♥' || card.suit === '♦') ? 'red' : 'black'}">
+                        <div>${card.rank}</div>
+                        <div style="font-size: 20px;">${card.suit}</div>
+                    </div>
+                `).join('');
+            } else {
+                communityCardsDiv.innerHTML = '<div style="color: rgba(255,255,255,0.5);">等待发牌...</div>';
+            }
+            
+            // 更新玩家显示
+            renderPlayers();
+        }
+        
+        // 显示消息
+        function showMessage(text) {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="message">${text}</div>`;
+            
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 3000);
+        }
+        
+        // 更新统计
+        function updateStats() {
+            document.getElementById('handsPlayed').textContent = stats.handsPlayed;
+            document.getElementById('accuracy').textContent = stats.handsPlayed > 0 
+                ? `${Math.floor(stats.correctDecisions / stats.handsPlayed * 100)}%` 
+                : '0%';
+            document.getElementById('evLoss').textContent = `-${stats.totalEVLoss.toFixed(1)}`;
+            document.getElementById('winnings').textContent = stats.winnings >= 0 
+                ? `+${stats.winnings}` 
+                : stats.winnings;
+        }
+    </script>
+</body>
+</html>

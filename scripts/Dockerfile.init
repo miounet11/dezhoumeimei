@@ -1,0 +1,12 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 安装必要工具
+RUN apk add --no-cache curl postgresql-client redis
+
+# 复制初始化脚本
+COPY init-system.sh .
+RUN chmod +x init-system.sh
+
+CMD ["./init-system.sh"]

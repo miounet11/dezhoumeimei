@@ -1,0 +1,2332 @@
+openapi: 3.0.3
+info:
+  title: PokerIQ Pro API
+  description: |
+    德州扑克AI训练工具后端API接口文档
+    
+    ## 功能模块
+    - 用户认证与管理
+    - AI训练系统
+    - 数据分析平台
+    - 成就系统
+    - 排行榜系统
+    - 文件管理
+    
+    ## 认证方式
+    使用JWT Bearer Token认证，Token有效期24小时
+    
+    ## 响应格式
+    所有API响应均采用统一的JSON格式
+    
+  version: 1.0.0
+  contact:
+    name: PokerIQ Pro API Support
+    email: api-support@pokeriq.pro
+    url: https://docs.pokeriq.pro
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.pokeriq.pro/v1
+    description: 生产环境
+  - url: https://api-staging.pokeriq.pro/v1
+    description: 测试环境
+  - url: http://localhost:3000/v1
+    description: 开发环境
+
+# 安全配置
+security:
+  - BearerAuth: []
+
+# 通用组件定义
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证token，格式：Bearer <token>
+
+  schemas:
+    # 通用响应格式
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 请求是否成功
+          example: true
+        code:
+          type: integer
+          description: 业务状态码
+          example: 200
+        message:
+          type: string
+          description: 响应消息
+          example: "操作成功"
+        data:
+          type: object
+          description: 响应数据
+        timestamp:
+          type: integer
+          format: int64
+          description: 服务器时间戳
+          example: 1703749200000
+      required:
+        - success
+        - code
+        - message
+        - timestamp
+
+    # 分页响应格式
+    PaginationResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items: {}
+                  description: 数据列表
+                pagination:
+                  $ref: '#/components/schemas/Pagination'
+
+    # 分页信息
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          description: 当前页码
+          example: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: 每页数量
+          example: 20
+        total:
+          type: integer
+          minimum: 0
+          description: 总记录数
+          example: 156
+        totalPages:
+          type: integer
+          minimum: 0
+          description: 总页数
+          example: 8
+      required:
+        - page
+        - pageSize
+        - total
+        - totalPages
+
+    # 错误响应
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: integer
+          description: 错误代码
+          example: 400
+        message:
+          type: string
+          description: 错误消息
+          example: "参数验证失败"
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                description: 错误字段
+              message:
+                type: string
+                description: 字段错误消息
+        timestamp:
+          type: integer
+          format: int64
+          example: 1703749200000
+      required:
+        - success
+        - code
+        - message
+        - timestamp
+
+    # 用户模型
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 用户ID
+          example: 12345
+        uuid:
+          type: string
+          format: uuid
+          description: 用户UUID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: 用户名
+          example: "poker_master"
+        email:
+          type: string
+          format: email
+          description: 邮箱地址
+          example: "user@example.com"
+        nickname:
+          type: string
+          maxLength: 50
+          description: 昵称
+          example: "扑克高手"
+        avatar_url:
+          type: string
+          format: uri
+          description: 头像URL
+          example: "https://cdn.pokeriq.pro/avatars/user123.jpg"
+        bio:
+          type: string
+          maxLength: 500
+          description: 个人简介
+          example: "专业德州扑克玩家，擅长现金桌游戏"
+        current_level:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: 当前等级
+          example: 8
+        current_exp:
+          type: integer
+          minimum: 0
+          description: 当前经验值
+          example: 1450
+        subscription_type:
+          type: string
+          enum: [free, premium, vip]
+          description: 订阅类型
+          example: "premium"
+        subscription_expires_at:
+          type: string
+          format: date-time
+          description: 订阅过期时间
+          example: "2024-12-31T23:59:59Z"
+        total_training_time:
+          type: integer
+          minimum: 0
+          description: 总训练时间(分钟)
+          example: 2880
+        total_hands_played:
+          type: integer
+          minimum: 0
+          description: 总手数
+          example: 15000
+        created_at:
+          type: string
+          format: date-time
+          description: 注册时间
+          example: "2024-01-01T00:00:00Z"
+        last_login_at:
+          type: string
+          format: date-time
+          description: 最后登录时间
+          example: "2024-12-01T10:30:00Z"
+      required:
+        - id
+        - uuid
+        - username
+        - email
+        - current_level
+        - current_exp
+        - subscription_type
+        - created_at
+
+    # 用户设置
+    UserSettings:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [dark, light]
+          default: dark
+          description: 主题设置
+        language:
+          type: string
+          default: "zh-CN"
+          description: 语言设置
+          example: "zh-CN"
+        background_id:
+          type: integer
+          minimum: 1
+          default: 1
+          description: 背景图片ID
+        default_stack_depth:
+          type: integer
+          minimum: 20
+          maximum: 500
+          default: 100
+          description: 默认筹码深度
+        auto_save_hands:
+          type: boolean
+          default: true
+          description: 自动保存手牌
+        show_gto_hints:
+          type: boolean
+          default: true
+          description: 显示GTO提示
+        email_notifications:
+          type: boolean
+          default: true
+          description: 邮件通知
+        push_notifications:
+          type: boolean
+          default: true
+          description: 推送通知
+        achievement_notifications:
+          type: boolean
+          default: true
+          description: 成就通知
+
+    # 训练会话
+    TrainingSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 会话ID
+          example: 12345
+        uuid:
+          type: string
+          format: uuid
+          description: 会话UUID
+        session_type:
+          type: string
+          enum: [quick, deep, simulation, skills]
+          description: 训练类型
+          example: "quick"
+        ai_opponent_type:
+          type: string
+          description: AI对手类型
+          example: "tight-aggressive"
+        position:
+          type: string
+          enum: [UTG, "UTG+1", MP, "MP+1", CO, BTN, SB, BB]
+          description: 位置
+          example: "BTN"
+        stack_depth:
+          type: integer
+          minimum: 20
+          maximum: 500
+          description: 筹码深度(BB)
+          example: 100
+        background_id:
+          type: integer
+          description: 背景图片ID
+          example: 3
+        duration:
+          type: integer
+          minimum: 0
+          description: 持续时间(秒)
+          example: 1800
+        hands_played:
+          type: integer
+          minimum: 0
+          description: 手数
+          example: 45
+        decisions_made:
+          type: integer
+          minimum: 0
+          description: 决策数
+          example: 38
+        correct_decisions:
+          type: integer
+          minimum: 0
+          description: 正确决策数
+          example: 32
+        accuracy_rate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: 准确率(%)
+          example: 84.21
+        starting_chips:
+          type: integer
+          default: 10000
+          description: 起始筹码
+        ending_chips:
+          type: integer
+          description: 结束筹码
+          example: 12500
+        net_result:
+          type: integer
+          description: 盈亏
+          example: 2500
+        status:
+          type: string
+          enum: [active, paused, completed, abandoned]
+          description: 会话状态
+          example: "completed"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        completed_at:
+          type: string
+          format: date-time
+          description: 完成时间
+      required:
+        - id
+        - uuid
+        - session_type
+        - ai_opponent_type
+        - duration
+        - hands_played
+        - decisions_made
+        - status
+        - created_at
+
+    # 手牌记录
+    Hand:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 手牌ID
+        uuid:
+          type: string
+          format: uuid
+          description: 手牌UUID
+        hand_number:
+          type: integer
+          minimum: 1
+          description: 手牌编号
+        position:
+          type: string
+          description: 位置
+        hole_cards:
+          type: string
+          pattern: "^[AKQJT2-9][hsdc][AKQJT2-9][hsdc]$"
+          description: 底牌
+          example: "AhKs"
+        community_cards:
+          type: string
+          description: 公共牌
+          example: "AcKd7h2s"
+        game_stage:
+          type: string
+          enum: [preflop, flop, turn, river, showdown]
+          description: 游戏阶段
+        user_action:
+          type: string
+          enum: [fold, call, raise, allin, check, bet]
+          description: 用户行动
+        ai_suggestion:
+          type: string
+          enum: [fold, call, raise, allin, check, bet]
+          description: AI建议
+        is_correct:
+          type: boolean
+          description: 是否正确
+        pot_size:
+          type: number
+          format: float
+          minimum: 0
+          description: 底池大小
+        result:
+          type: number
+          format: float
+          description: 该手牌盈亏
+        expected_value:
+          type: number
+          format: float
+          description: 期望值
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+
+    # 成就定义
+    AchievementDefinition:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 成就ID
+        code:
+          type: string
+          description: 成就代码
+          example: "training_rookie"
+        name:
+          type: string
+          description: 成就名称
+          example: "训练新手"
+        description:
+          type: string
+          description: 成就描述
+          example: "完成累计训练时间达到指定要求"
+        category:
+          type: string
+          enum: [ability, time, special, milestone, streak]
+          description: 成就分类
+        icon_url:
+          type: string
+          format: uri
+          description: 图标URL
+        max_level:
+          type: integer
+          minimum: 1
+          description: 最大等级
+        rarity:
+          type: string
+          enum: [common, rare, epic, legendary]
+          description: 稀有度
+
+    # 用户成就
+    UserAchievement:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 记录ID
+        achievement_id:
+          type: integer
+          description: 成就定义ID
+        code:
+          type: string
+          description: 成就代码
+        name:
+          type: string
+          description: 成就名称
+        description:
+          type: string
+          description: 成就描述
+        category:
+          type: string
+          description: 成就分类
+        current_level:
+          type: integer
+          minimum: 0
+          description: 当前等级
+        current_progress:
+          type: integer
+          minimum: 0
+          description: 当前进度
+        max_progress:
+          type: integer
+          description: 当前等级所需进度
+        progress_percentage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: 进度百分比
+        is_completed:
+          type: boolean
+          description: 是否完全完成
+        first_unlocked_at:
+          type: string
+          format: date-time
+          description: 首次解锁时间
+        last_progress_at:
+          type: string
+          format: date-time
+          description: 最后进度更新时间
+
+    # 排行榜
+    Leaderboard:
+      type: object
+      properties:
+        leaderboard_type:
+          type: string
+          enum: [total_time, monthly_exp, accuracy, level, hands_played, streak_days]
+          description: 排行榜类型
+        period:
+          type: string
+          enum: [daily, weekly, monthly, quarterly, yearly, all_time]
+          description: 统计周期
+        rankings:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankingItem'
+          description: 排名列表
+        generated_at:
+          type: string
+          format: date-time
+          description: 生成时间
+
+    # 排名项
+    RankingItem:
+      type: object
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+          description: 排名
+        user_id:
+          type: integer
+          format: int64
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        score:
+          type: number
+          format: float
+          description: 分数
+        change:
+          type: string
+          description: 排名变化
+          example: "+2"
+        avatar_url:
+          type: string
+          format: uri
+          description: 头像URL
+
+    # 背景图片
+    Background:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 背景ID
+        name:
+          type: string
+          description: 背景名称
+        category:
+          type: string
+          enum: [professional, casino, abstract, nature, tech]
+          description: 背景分类
+        image_url:
+          type: string
+          format: uri
+          description: 图片URL
+        thumbnail_url:
+          type: string
+          format: uri
+          description: 缩略图URL
+        unlock_level:
+          type: integer
+          minimum: 1
+          description: 解锁等级
+        is_premium:
+          type: boolean
+          description: 是否付费
+        is_unlocked:
+          type: boolean
+          description: 是否已解锁
+
+    # 统计数据
+    UserStats:
+      type: object
+      properties:
+        total_hands:
+          type: integer
+          description: 总手数
+        total_training_time:
+          type: integer
+          description: 总训练时间(分钟)
+        total_sessions:
+          type: integer
+          description: 总会话数
+        average_accuracy:
+          type: number
+          format: float
+          description: 平均准确率
+        best_accuracy:
+          type: number
+          format: float
+          description: 最佳准确率
+        vpip:
+          type: number
+          format: float
+          description: 入池率
+        pfr:
+          type: number
+          format: float
+          description: 翻前加注率
+        three_bet:
+          type: number
+          format: float
+          description: 3bet率
+        position_stats:
+          type: object
+          description: 位置统计
+          additionalProperties:
+            type: object
+        weekly_progress:
+          type: object
+          description: 周进度统计
+        monthly_progress:
+          type: object
+          description: 月进度统计
+
+    # AI决策建议
+    AIDecision:
+      type: object
+      properties:
+        recommended_action:
+          type: string
+          enum: [fold, call, raise, allin, check, bet]
+          description: 推荐行动
+        action_probabilities:
+          type: object
+          description: 各行动概率
+          properties:
+            fold:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 1
+            call:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 1
+            raise:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 1
+        bet_size:
+          type: number
+          format: float
+          minimum: 0
+          description: 建议下注大小
+        expected_value:
+          type: number
+          format: float
+          description: 期望值
+        reasoning:
+          type: string
+          description: 决策理由
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: 置信度
+
+  # 通用参数
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: 页码
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    
+    PageSizeParam:
+      name: pageSize
+      in: query
+      description: 每页数量
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    
+    UserIdParam:
+      name: userId
+      in: path
+      required: true
+      description: 用户ID
+      schema:
+        type: integer
+        format: int64
+
+  # 通用响应
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    InternalServerError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+# API路径定义
+paths:
+  # ================================
+  # 认证相关API
+  # ================================
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: 用户注册
+      description: |
+        用户注册接口，需要提供用户名、邮箱和密码。
+        用户名必须唯一，邮箱必须有效。
+      operationId: registerUser
+      security: []  # 注册接口不需要认证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                  pattern: "^[a-zA-Z0-9_-]+$"
+                  description: 用户名，只能包含字母数字下划线横线
+                  example: "poker_master"
+                email:
+                  type: string
+                  format: email
+                  description: 邮箱地址
+                  example: "user@example.com"
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 50
+                  description: 密码，至少8位
+                  example: "securepassword123"
+                nickname:
+                  type: string
+                  maxLength: 50
+                  description: 昵称(可选)
+                  example: "扑克高手"
+              required:
+                - username
+                - email
+                - password
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          token:
+                            type: string
+                            description: JWT认证token
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 用户名或邮箱已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: 用户登录
+      description: 使用用户名/邮箱和密码登录
+      operationId: loginUser
+      security: []  # 登录接口不需要认证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: 用户名或邮箱
+                  example: "poker_master"
+                password:
+                  type: string
+                  description: 密码
+                  example: "securepassword123"
+                remember:
+                  type: boolean
+                  default: false
+                  description: 记住登录状态(延长token有效期)
+              required:
+                - username
+                - password
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                            description: JWT认证token
+                          refresh_token:
+                            type: string
+                            description: 刷新token
+                          expires_in:
+                            type: integer
+                            description: token过期时间(秒)
+                          user:
+                            $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: 用户名或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: 刷新Token
+      description: 使用refresh_token刷新访问token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: 刷新token
+              required:
+                - refresh_token
+      responses:
+        '200':
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          expires_in:
+                            type: integer
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: 用户登出
+      description: 登出并使token失效
+      operationId: logoutUser
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  # ================================
+  # 用户相关API
+  # ================================
+  /users/profile:
+    get:
+      tags:
+        - Users
+      summary: 获取用户信息
+      description: 获取当前用户的详细信息
+      operationId: getUserProfile
+      responses:
+        '200':
+          description: 用户信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags:
+        - Users
+      summary: 更新用户信息
+      description: 更新当前用户的基本信息
+      operationId: updateUserProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  maxLength: 50
+                  description: 昵称
+                bio:
+                  type: string
+                  maxLength: 500
+                  description: 个人简介
+                avatar_url:
+                  type: string
+                  format: uri
+                  description: 头像URL
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/settings:
+    get:
+      tags:
+        - Users
+      summary: 获取用户设置
+      description: 获取当前用户的设置信息
+      operationId: getUserSettings
+      responses:
+        '200':
+          description: 用户设置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserSettings'
+
+    put:
+      tags:
+        - Users
+      summary: 更新用户设置
+      description: 更新当前用户的设置
+      operationId: updateUserSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettings'
+      responses:
+        '200':
+          description: 设置更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /users/{userId}/public:
+    get:
+      tags:
+        - Users
+      summary: 获取用户公开信息
+      description: 获取指定用户的公开信息（用于关注、排行榜等）
+      operationId: getUserPublicInfo
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: 用户公开信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          username:
+                            type: string
+                          nickname:
+                            type: string
+                          avatar_url:
+                            type: string
+                          current_level:
+                            type: integer
+                          rank_name:
+                            type: string
+                          total_training_time:
+                            type: integer
+                          is_following:
+                            type: boolean
+                          followers_count:
+                            type: integer
+
+  # ================================
+  # 训练系统API
+  # ================================
+  /training/sessions:
+    post:
+      tags:
+        - Training
+      summary: 创建训练会话
+      description: 创建新的AI训练会话
+      operationId: createTrainingSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_type:
+                  type: string
+                  enum: [quick, deep, simulation, skills]
+                  description: 训练类型
+                ai_opponent_type:
+                  type: string
+                  description: AI对手类型
+                  example: "tight-aggressive"
+                position:
+                  type: string
+                  enum: [UTG, "UTG+1", MP, "MP+1", CO, BTN, SB, BB]
+                  description: 位置(可选)
+                stack_depth:
+                  type: integer
+                  minimum: 20
+                  maximum: 500
+                  default: 100
+                  description: 筹码深度
+                blind_level:
+                  type: string
+                  description: 盲注级别
+                  example: "1/2"
+                background_id:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                  description: 背景图片ID
+                training_focus:
+                  type: string
+                  enum: [preflop, postflop, bluffing, value_betting]
+                  description: 训练重点(可选)
+                difficulty_level:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 5
+                  description: 难度等级
+              required:
+                - session_type
+                - ai_opponent_type
+      responses:
+        '201':
+          description: 训练会话创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TrainingSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags:
+        - Training
+      summary: 获取训练会话列表
+      description: 获取当前用户的训练会话历史
+      operationId: getTrainingSessions
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: session_type
+          in: query
+          description: 训练类型过滤
+          schema:
+            type: string
+            enum: [quick, deep, simulation, skills]
+        - name: status
+          in: query
+          description: 会话状态过滤
+          schema:
+            type: string
+            enum: [active, completed, abandoned]
+        - name: date_from
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 训练会话列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginationResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/TrainingSession'
+
+  /training/sessions/{sessionId}:
+    get:
+      tags:
+        - Training
+      summary: 获取训练会话详情
+      description: 获取指定训练会话的详细信息
+      operationId: getTrainingSessionDetail
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: 训练会话ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 训练会话详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/TrainingSession'
+                          - type: object
+                            properties:
+                              hands:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/Hand'
+                              performance_metrics:
+                                type: object
+                                description: 性能指标详情
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Training
+      summary: 更新训练会话
+      description: 更新训练会话状态或结果
+      operationId: updateTrainingSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [paused, completed, abandoned]
+                  description: 会话状态
+                ending_chips:
+                  type: integer
+                  description: 结束筹码
+                session_data:
+                  type: object
+                  description: 会话详细数据
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  # ================================
+  # AI引擎API
+  # ================================
+  /ai/decision:
+    post:
+      tags:
+        - AI Engine
+      summary: 获取AI决策建议
+      description: |
+        根据当前牌局状态获取AI的决策建议。
+        需要提供底牌、公共牌、位置、底池大小等信息。
+      operationId: getAIDecision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hole_cards:
+                  type: string
+                  pattern: "^[AKQJT2-9][hsdc][AKQJT2-9][hsdc]$"
+                  description: 底牌，格式如AhKs
+                  example: "AhKs"
+                community_cards:
+                  type: string
+                  description: 公共牌，格式如AcKd7h
+                  example: "AcKd7h"
+                position:
+                  type: string
+                  enum: [UTG, "UTG+1", MP, "MP+1", CO, BTN, SB, BB]
+                  description: 位置
+                game_stage:
+                  type: string
+                  enum: [preflop, flop, turn, river]
+                  description: 游戏阶段
+                pot_size:
+                  type: number
+                  format: float
+                  minimum: 0
+                  description: 底池大小(BB)
+                  example: 3.5
+                stack_size:
+                  type: number
+                  format: float
+                  minimum: 0
+                  description: 有效筹码量(BB)
+                  example: 100
+                current_bet:
+                  type: number
+                  format: float
+                  minimum: 0
+                  description: 当前下注额(BB)
+                  example: 2.5
+                opponent_count:
+                  type: integer
+                  minimum: 1
+                  maximum: 8
+                  description: 对手数量
+                  example: 3
+                opponent_actions:
+                  type: array
+                  items:
+                    type: string
+                  description: 对手行动历史
+                  example: ["fold", "call", "raise"]
+                ai_opponent_type:
+                  type: string
+                  description: AI对手类型
+                  example: "tight-aggressive"
+              required:
+                - hole_cards
+                - position
+                - game_stage
+                - pot_size
+                - stack_size
+      responses:
+        '200':
+          description: AI决策建议
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AIDecision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /ai/analyze-hand:
+    post:
+      tags:
+        - AI Engine
+      summary: 手牌分析
+      description: 对已完成的手牌进行详细分析
+      operationId: analyzeHand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hand_data:
+                  type: object
+                  description: 完整的手牌数据
+                  required:
+                    - hole_cards
+                    - community_cards
+                    - actions
+                    - pot_progression
+      responses:
+        '200':
+          description: 手牌分析结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          overall_rating:
+                            type: integer
+                            minimum: 1
+                            maximum: 5
+                            description: 整体评分
+                          mistakes:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                street:
+                                  type: string
+                                action:
+                                  type: string
+                                optimal_action:
+                                  type: string
+                                ev_loss:
+                                  type: number
+                                explanation:
+                                  type: string
+                          strengths:
+                            type: array
+                            items:
+                              type: string
+                          suggestions:
+                            type: array
+                            items:
+                              type: string
+
+  # ================================
+  # 成就系统API
+  # ================================
+  /achievements:
+    get:
+      tags:
+        - Achievements
+      summary: 获取用户成就列表
+      description: 获取当前用户的所有成就进度
+      operationId: getUserAchievements
+      parameters:
+        - name: category
+          in: query
+          description: 成就分类过滤
+          schema:
+            type: string
+            enum: [ability, time, special, milestone, streak]
+        - name: status
+          in: query
+          description: 成就状态过滤
+          schema:
+            type: string
+            enum: [locked, unlocked, completed]
+      responses:
+        '200':
+          description: 成就列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          achievements:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/UserAchievement'
+                          summary:
+                            type: object
+                            properties:
+                              total_achievements:
+                                type: integer
+                              completed_achievements:
+                                type: integer
+                              total_exp_gained:
+                                type: integer
+                              completion_rate:
+                                type: number
+                                format: float
+
+  /achievements/definitions:
+    get:
+      tags:
+        - Achievements
+      summary: 获取成就定义列表
+      description: 获取所有成就的定义信息
+      operationId: getAchievementDefinitions
+      security: []  # 公开接口
+      responses:
+        '200':
+          description: 成就定义列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AchievementDefinition'
+
+  /achievements/progress:
+    post:
+      tags:
+        - Achievements
+      summary: 更新成就进度
+      description: 更新指定成就的进度（通常由系统内部调用）
+      operationId: updateAchievementProgress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                achievement_code:
+                  type: string
+                  description: 成就代码
+                  example: "training_rookie"
+                progress_increment:
+                  type: integer
+                  minimum: 1
+                  description: 进度增量
+                  example: 1
+                trigger_data:
+                  type: object
+                  description: 触发数据（可选）
+              required:
+                - achievement_code
+                - progress_increment
+      responses:
+        '200':
+          description: 进度更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          level_up:
+                            type: boolean
+                            description: 是否升级
+                          new_level:
+                            type: integer
+                            description: 新等级
+                          exp_gained:
+                            type: integer
+                            description: 获得经验
+                          unlocked_rewards:
+                            type: array
+                            items:
+                              type: string
+                            description: 解锁的奖励
+
+  # ================================
+  # 分析系统API
+  # ================================
+  /analysis/import:
+    post:
+      tags:
+        - Analysis
+      summary: 导入手牌历史
+      description: |
+        支持导入多种格式的手牌历史文件进行分析：
+        - PokerStars hand history (.txt)
+        - GGPoker export (.txt)
+        - CSV格式 (.csv)
+        - Holdem Manager 3 (.xml)
+      operationId: importHandHistory
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 手牌历史文件
+                file_type:
+                  type: string
+                  enum: [pokerstars, ggpoker, csv, hm3, pt4, auto]
+                  default: auto
+                  description: 文件类型，auto为自动识别
+                stakes_filter:
+                  type: string
+                  description: 级别过滤，如"NL10,NL25"
+                date_from:
+                  type: string
+                  format: date
+                  description: 分析起始日期
+                date_to:
+                  type: string
+                  format: date
+                  description: 分析结束日期
+              required:
+                - file
+      responses:
+        '202':
+          description: 文件上传成功，开始分析
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          import_id:
+                            type: string
+                            format: uuid
+                            description: 导入任务ID
+                          estimated_time:
+                            type: integer
+                            description: 预估分析时间(秒)
+        '400':
+          description: 文件格式错误或参数无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analysis/imports/{importId}/status:
+    get:
+      tags:
+        - Analysis
+      summary: 查询导入状态
+      description: 查询手牌历史导入和分析的状态
+      operationId: getImportStatus
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          description: 导入任务ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 导入状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [processing, completed, failed]
+                          progress:
+                            type: integer
+                            minimum: 0
+                            maximum: 100
+                            description: 进度百分比
+                          hands_processed:
+                            type: integer
+                            description: 已处理手数
+                          total_hands:
+                            type: integer
+                            description: 总手数
+                          error_message:
+                            type: string
+                            description: 错误消息(如果失败)
+
+  /analysis/stats:
+    get:
+      tags:
+        - Analysis
+      summary: 获取统计数据
+      description: 获取用户的详细统计数据和分析报告
+      operationId: getUserStats
+      parameters:
+        - name: period
+          in: query
+          description: 统计周期
+          schema:
+            type: string
+            enum: [week, month, quarter, year, all]
+            default: month
+        - name: import_id
+          in: query
+          description: 指定导入记录ID
+          schema:
+            type: string
+            format: uuid
+        - name: stakes
+          in: query
+          description: 级别过滤
+          schema:
+            type: string
+            example: "NL10,NL25"
+      responses:
+        '200':
+          description: 统计数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserStats'
+
+  /analysis/charts/{chartType}:
+    get:
+      tags:
+        - Analysis
+      summary: 获取图表数据
+      description: 获取各种图表的数据，用于前端可视化
+      operationId: getChartData
+      parameters:
+        - name: chartType
+          in: path
+          required: true
+          description: 图表类型
+          schema:
+            type: string
+            enum: [winrate-trend, position-stats, hand-range, hourly-performance]
+        - name: period
+          in: query
+          description: 时间周期
+          schema:
+            type: string
+            enum: [week, month, quarter, year]
+            default: month
+      responses:
+        '200':
+          description: 图表数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          chart_data:
+                            type: array
+                            items:
+                              type: object
+                          chart_config:
+                            type: object
+                            description: 图表配置信息
+
+  # ================================
+  # 排行榜API
+  # ================================
+  /leaderboards:
+    get:
+      tags:
+        - Leaderboards
+      summary: 获取排行榜
+      description: 获取指定类型和周期的排行榜数据
+      operationId: getLeaderboard
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: 排行榜类型
+          schema:
+            type: string
+            enum: [total_time, monthly_exp, accuracy, level, hands_played, streak_days]
+        - name: period
+          in: query
+          description: 统计周期
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, quarterly, yearly, all_time]
+            default: monthly
+        - name: limit
+          in: query
+          description: 返回数量限制
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: 偏移量，用于分页
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: 排行榜数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/Leaderboard'
+                          - type: object
+                            properties:
+                              user_rank:
+                                type: object
+                                description: 当前用户在此排行榜中的排名
+                                properties:
+                                  rank:
+                                    type: integer
+                                  score:
+                                    type: number
+                                  percentile:
+                                    type: number
+
+  /leaderboards/user-rank:
+    get:
+      tags:
+        - Leaderboards
+      summary: 获取用户排名
+      description: 获取当前用户在各个排行榜中的排名情况
+      operationId: getUserRanks
+      responses:
+        '200':
+          description: 用户排名信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ranks:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                type:
+                                  type: string
+                                period:
+                                  type: string
+                                rank:
+                                  type: integer
+                                score:
+                                  type: number
+                                change:
+                                  type: integer
+                                percentile:
+                                  type: number
+
+  # ================================
+  # 关注系统API
+  # ================================
+  /follows:
+    get:
+      tags:
+        - Social
+      summary: 获取关注列表
+      description: 获取当前用户的关注列表
+      operationId: getFollowingList
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: 关注列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginationResponse'
+
+    post:
+      tags:
+        - Social
+      summary: 关注用户
+      description: 关注指定用户
+      operationId: followUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                  format: int64
+                  description: 要关注的用户ID
+              required:
+                - user_id
+      responses:
+        '201':
+          description: 关注成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: 无效的用户ID或已达到关注上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /follows/{userId}:
+    delete:
+      tags:
+        - Social
+      summary: 取消关注
+      description: 取消关注指定用户
+      operationId: unfollowUser
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: 取消关注成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /followers:
+    get:
+      tags:
+        - Social
+      summary: 获取粉丝列表
+      description: 获取当前用户的粉丝列表
+      operationId: getFollowersList
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: 粉丝列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginationResponse'
+
+  # ================================
+  # 背景系统API
+  # ================================
+  /backgrounds:
+    get:
+      tags:
+        - Resources
+      summary: 获取背景列表
+      description: 获取所有可用的背景图片
+      operationId: getBackgrounds
+      security: []  # 公开接口
+      parameters:
+        - name: category
+          in: query
+          description: 背景分类过滤
+          schema:
+            type: string
+            enum: [professional, casino, abstract, nature, tech]
+        - name: unlocked_only
+          in: query
+          description: 是否只返回已解锁的背景(需要认证)
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 背景列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          backgrounds:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Background'
+                          categories:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                category:
+                                  type: string
+                                count:
+                                  type: integer
+
+  /backgrounds/{backgroundId}/unlock:
+    post:
+      tags:
+        - Resources
+      summary: 解锁背景
+      description: 解锁指定背景（付费背景需要支付）
+      operationId: unlockBackground
+      parameters:
+        - name: backgroundId
+          in: path
+          required: true
+          description: 背景ID
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unlock_method:
+                  type: string
+                  enum: [purchase, achievement, level]
+                  description: 解锁方式
+                payment_info:
+                  type: object
+                  description: 支付信息(付费解锁时需要)
+      responses:
+        '200':
+          description: 解锁成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  # ================================
+  # 文件上传API
+  # ================================
+  /files/upload:
+    post:
+      tags:
+        - Files
+      summary: 文件上传
+      description: 上传用户头像或其他文件
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 要上传的文件
+                type:
+                  type: string
+                  enum: [avatar, background, document]
+                  description: 文件类型
+              required:
+                - file
+                - type
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          file_url:
+                            type: string
+                            format: uri
+                            description: 文件访问URL
+                          file_id:
+                            type: string
+                            description: 文件ID
+                          file_size:
+                            type: integer
+                            description: 文件大小(字节)
+
+  # ================================
+  # 系统配置API
+  # ================================
+  /system/config:
+    get:
+      tags:
+        - System
+      summary: 获取系统配置
+      description: 获取公开的系统配置信息
+      operationId: getSystemConfig
+      security: []  # 公开接口
+      responses:
+        '200':
+          description: 系统配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          app:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              version:
+                                type: string
+                              features:
+                                type: array
+                                items:
+                                  type: string
+                          training:
+                            type: object
+                            properties:
+                              max_session_duration:
+                                type: integer
+                              default_stack_depth:
+                                type: integer
+                          limits:
+                            type: object
+                            properties:
+                              max_follows:
+                                type: integer
+                              max_file_size:
+                                type: integer
+
+  /system/announcements:
+    get:
+      tags:
+        - System
+      summary: 获取系统公告
+      description: 获取当前有效的系统公告
+      operationId: getAnnouncements
+      security: []  # 公开接口
+      responses:
+        '200':
+          description: 系统公告列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            title:
+                              type: string
+                            content:
+                              type: string
+                            type:
+                              type: string
+                            priority:
+                              type: integer
+                            is_popup:
+                              type: boolean
+                            created_at:
+                              type: string
+                              format: date-time
+
+  # ================================
+  # 健康检查和监控API
+  # ================================
+  /health:
+    get:
+      tags:
+        - System
+      summary: 健康检查
+      description: 系统健康状态检查
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: 系统健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                  uptime:
+                    type: integer
+                    description: 运行时间(秒)
+                  dependencies:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        enum: [ok, error]
+                      redis:
+                        type: string  
+                        enum: [ok, error]
+                      ai_service:
+                        type: string
+                        enum: [ok, error]
+
+  /metrics:
+    get:
+      tags:
+        - System
+      summary: 系统指标
+      description: Prometheus格式的监控指标
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: 监控指标
+          content:
+            text/plain:
+              schema:
+                type: string
+
+# 全局标签
+tags:
+  - name: Authentication
+    description: 用户认证相关接口
+  - name: Users
+    description: 用户管理接口
+  - name: Training
+    description: AI训练系统接口
+  - name: AI Engine
+    description: AI引擎和决策分析接口
+  - name: Achievements
+    description: 成就系统接口
+  - name: Analysis
+    description: 数据分析接口
+  - name: Leaderboards
+    description: 排行榜接口
+  - name: Social
+    description: 社交功能接口
+  - name: Resources
+    description: 资源管理接口
+  - name: Files
+    description: 文件管理接口
+  - name: System
+    description: 系统配置和管理接口
+
+# 外部文档链接
+externalDocs:
+  description: PokerIQ Pro 开发文档
+  url: https://docs.pokeriq.pro

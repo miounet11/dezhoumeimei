@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PokerIQ Pro - API测试面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status-bar {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .status-item {
+            display: inline-block;
+            margin-right: 30px;
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border-radius: 20px;
+        }
+        
+        .status-item.online {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .response {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎰 PokerIQ Pro API 测试面板</h1>
+        
+        <div class="status-bar">
+            <span class="status-item" id="api-status">⏳ 检查中...</span>
+            <span class="status-item" id="db-status">PostgreSQL: 检查中...</span>
+            <span class="status-item" id="redis-status">Redis: 检查中...</span>
+        </div>
+        
+        <div class="grid">
+            <!-- 认证测试 -->
+            <div class="card">
+                <h2>🔐 认证测试</h2>
+                <input type="email" id="login-email" placeholder="邮箱" value="test@pokeriq.com">
+                <input type="password" id="login-password" placeholder="密码" value="test123456">
+                <button onclick="testLogin()">登录测试</button>
+                <button onclick="testRegister()">注册测试</button>
+                <div id="auth-response" class="response"></div>
+            </div>
+            
+            <!-- GTO策略测试 -->
+            <div class="card">
+                <h2>🎯 GTO策略</h2>
+                <select id="position">
+                    <option value="BTN">按钮位置 (BTN)</option>
+                    <option value="CO">关煞位 (CO)</option>
+                    <option value="MP">中位 (MP)</option>
+                    <option value="EP">前位 (EP)</option>
+                    <option value="BB">大盲 (BB)</option>
+                    <option value="SB">小盲 (SB)</option>
+                </select>
+                <input type="text" id="hole-cards" placeholder="手牌 (例: AhKd)" value="AhKd">
+                <button onclick="testGTO()">计算GTO策略</button>
+                <div id="gto-response" class="response"></div>
+            </div>
+            
+            <!-- 用户画像测试 -->
+            <div class="card">
+                <h2>👤 用户画像</h2>
+                <input type="text" id="user-id" placeholder="用户ID" value="user_1">
+                <button onclick="testProfile()">获取技能画像</button>
+                <button onclick="testLeaderboard()">查看排行榜</button>
+                <div id="profile-response" class="response"></div>
+            </div>
+            
+            <!-- 推荐系统测试 -->
+            <div class="card">
+                <h2>💡 推荐系统</h2>
+                <input type="text" id="rec-user-id" placeholder="用户ID" value="user_1">
+                <button onclick="testRecommendations()">获取推荐</button>
+                <button onclick="testTrending()">热门内容</button>
+                <div id="rec-response" class="response"></div>
+            </div>
+            
+            <!-- 训练系统测试 -->
+            <div class="card">
+                <h2>🎮 训练系统</h2>
+                <select id="training-type">
+                    <option value="quick">快速训练</option>
+                    <option value="scenario">场景训练</option>
+                    <option value="tournament">锦标赛模式</option>
+                </select>
+                <select id="difficulty">
+                    <option value="1">初级</option>
+                    <option value="2">中级</option>
+                    <option value="3">高级</option>
+                    <option value="4">专家</option>
+                    <option value="5">大师</option>
+                </select>
+                <button onclick="startTraining()">开始训练</button>
+                <div id="training-response" class="response"></div>
+            </div>
+            
+            <!-- 负载测试 -->
+            <div class="card">
+                <h2>⚡ 性能测试</h2>
+                <input type="number" id="concurrent-users" placeholder="并发用户数" value="10" min="1" max="100">
+                <input type="number" id="test-duration" placeholder="测试时长(秒)" value="10" min="5" max="60">
+                <button onclick="runLoadTest()">开始压力测试</button>
+                <div id="load-response" class="response"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:3001';
+        let authToken = null;
+        
+        // 检查服务状态
+        async function checkStatus() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                
+                document.getElementById('api-status').className = 'status-item online';
+                document.getElementById('api-status').textContent = '✅ API网关: 在线';
+                
+                if (data.services.postgres === 'connected') {
+                    document.getElementById('db-status').className = 'status-item online';
+                    document.getElementById('db-status').textContent = '✅ PostgreSQL: 已连接';
+                }
+                
+                if (data.services.redis === 'connected') {
+                    document.getElementById('redis-status').className = 'status-item online';
+                    document.getElementById('redis-status').textContent = '✅ Redis: 已连接';
+                }
+            } catch (error) {
+                document.getElementById('api-status').className = 'status-item';
+                document.getElementById('api-status').textContent = '❌ API网关: 离线';
+            }
+        }
+        
+        // 登录测试
+        async function testLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    showResponse('auth-response', data, 'success');
+                } else {
+                    showResponse('auth-response', data, 'error');
+                }
+            } catch (error) {
+                showResponse('auth-response', { error: error.message }, 'error');
+            }
+        }
+        
+        // 注册测试
+        async function testRegister() {
+            const email = `test${Date.now()}@pokeriq.com`;
+            const password = 'test123456';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, username: `user_${Date.now()}` })
+                });
+                
+                const data = await response.json();
+                showResponse('auth-response', data, 'success');
+            } catch (error) {
+                showResponse('auth-response', { error: error.message }, 'error');
+            }
+        }
+        
+        // GTO策略测试
+        async function testGTO() {
+            const position = document.getElementById('position').value;
+            const holeCards = document.getElementById('hole-cards').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/gto/strategy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        position, 
+                        hole_cards: holeCards,
+                        pot_size: 100,
+                        stack_size: 1000
+                    })
+                });
+                
+                const data = await response.json();
+                showResponse('gto-response', data, 'success');
+            } catch (error) {
+                showResponse('gto-response', { error: error.message }, 'error');
+            }
+        }
+        
+        // 用户画像测试
+        async function testProfile() {
+            const userId = document.getElementById('user-id').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/profile/${userId}`);
+                const data = await response.json();
+                showResponse('profile-response', data, 'success');
+            } catch (error) {
+                showResponse('profile-response', { error: error.message }, 'error');
+            }
+        }
+        
+        // 推荐测试
+        async function testRecommendations() {
+            const userId = document.getElementById('rec-user-id').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/recommendations/${userId}`);
+                const data = await response.json();
+                showResponse('rec-response', data, 'success');
+            } catch (error) {
+                showResponse('rec-response', { error: error.message }, 'error');
+            }
+        }
+        
+        // 开始训练
+        async function startTraining() {
+            const trainingType = document.getElementById('training-type').value;
+            const difficulty = parseInt(document.getElementById('difficulty').value);
+            
+            try {
+                const response = await fetch(`${API_URL}/api/training/start`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken || 'test-token'}`
+                    },
+                    body: JSON.stringify({ trainingType, difficulty })
+                });
+                
+                const data = await response.json();
+                showResponse('training-response', data, 'success');
+            } catch (error) {
+                showResponse('training-response', { error: error.message }, 'error');
+            }
+        }
+        
+        // 负载测试
+        async function runLoadTest() {
+            const users = document.getElementById('concurrent-users').value;
+            const duration = document.getElementById('test-duration').value;
+            
+            showResponse('load-response', { 
+                message: `开始负载测试: ${users}个并发用户, ${duration}秒`,
+                note: '请在终端运行: cd load-testing && npm test'
+            }, 'success');
+        }
+        
+        // 显示响应
+        function showResponse(elementId, data, type = '') {
+            const element = document.getElementById(elementId);
+            element.className = `response ${type}`;
+            element.textContent = JSON.stringify(data, null, 2);
+        }
+        
+        // 页面加载时检查状态
+        window.onload = () => {
+            checkStatus();
+            setInterval(checkStatus, 5000); // 每5秒检查一次
+        };
+    </script>
+</body>
+</html>
