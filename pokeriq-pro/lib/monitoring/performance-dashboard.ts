@@ -10,6 +10,7 @@
  * - Real-time alerting system
  */
 
+import { useState, useEffect } from 'react';
 import { mobileOptimizer, PerformanceMetrics } from '../mobile/performance-optimizer';
 
 // Performance thresholds based on Core Web Vitals

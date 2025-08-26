@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const { withBundleOptimization } = require('./lib/performance/bundle-optimizer');
+// const { withBundleOptimization } = require('./lib/performance/bundle-optimizer');
 
 const nextConfig = {
   // 启用React严格模式
@@ -215,5 +215,5 @@ const nextConfig = {
   },
 };
 
-// Apply advanced bundle optimization
-module.exports = withBundleOptimization(nextConfig);
+// Export configuration
+module.exports = nextConfig;

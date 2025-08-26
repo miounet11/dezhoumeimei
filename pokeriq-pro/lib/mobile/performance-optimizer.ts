@@ -380,11 +380,11 @@ class MobilePerformanceOptimizer {
     const now = Date.now();
     const maxAge = 10 * 60 * 1000; // 10 minutes
     
-    for (const [url, resource] of this.resourceCache.entries()) {
+    Array.from(this.resourceCache.entries()).forEach(([url, resource]) => {
       if (now - resource.timestamp > maxAge) {
         this.resourceCache.delete(url);
       }
-    }
+    });
   }
 
   /**
