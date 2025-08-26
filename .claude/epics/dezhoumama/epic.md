@@ -1,11 +1,11 @@
 ---
 name: dezhoumama
-status: backlog
+status: in-progress
 created: 2025-08-26T02:13:56Z
-progress: 0%
+progress: 25%
 prd: .claude/prds/dezhoumama.md
 github: https://github.com/miounet11/dezhoumeimei/issues/2
-updated: 2025-08-26T04:06:08Z
+updated: 2025-08-26T17:23:46Z
 
 # Epic: dezhoumama
 
