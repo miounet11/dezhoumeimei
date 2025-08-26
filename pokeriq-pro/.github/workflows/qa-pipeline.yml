@@ -1,0 +1,593 @@
+name: Quality Assurance Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*', 'release/*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+  BASE_URL: 'http://localhost:8820'
+  TEST_USER_EMAIL: 'test@pokeriq.com'
+  TEST_USER_PASSWORD: 'TestPassword123!'
+
+jobs:
+  setup:
+    name: 🚀 Setup and Install
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache.outputs.cache-hit }}
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Cache dependencies
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: 📥 Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: 🏗️ Build application
+        run: npm run build
+
+      - name: 📦 Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: .next/
+          retention-days: 1
+
+  lint-and-typecheck:
+    name: 🔍 Lint and Type Check
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Restore dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🔍 ESLint
+        run: npm run lint
+
+      - name: 🏷️ TypeScript Check
+        run: npm run typecheck
+
+      - name: 📊 Upload lint results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: lint-results
+          path: |
+            eslint-report.json
+            tsc-output.log
+
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Restore dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🧪 Run unit tests
+        run: npm run test:coverage
+
+      - name: 📊 Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unit-tests
+          name: unit-test-coverage
+
+      - name: 📦 Upload test artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            coverage/
+            test-results/
+
+  integration-tests:
+    name: 🔗 Integration Tests  
+    runs-on: ubuntu-latest
+    needs: setup
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pokeriq_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Restore dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 📋 Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: .next/
+
+      - name: 🗄️ Setup test database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pokeriq_test
+          REDIS_URL: redis://localhost:6379
+        run: |
+          npm run db:migrate
+          npm run db:seed-test-users
+
+      - name: 🏃 Start application
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pokeriq_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+        run: |
+          npm run start &
+          sleep 10
+          curl --retry 10 --retry-delay 5 --retry-connrefused ${{ env.BASE_URL }}/api/health
+
+      - name: 🔗 Run integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pokeriq_test
+          REDIS_URL: redis://localhost:6379
+        run: npm run test:integration
+
+      - name: 📊 Upload integration test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration-test-results
+          path: test-results/integration/
+
+  accessibility-tests:
+    name: ♿ Accessibility Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Restore dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: ♿ Run accessibility tests
+        run: npm run test:a11y
+
+      - name: 📊 Upload accessibility test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: accessibility-test-results
+          path: test-results/accessibility/
+
+  performance-tests:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Restore dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 📋 Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: .next/
+
+      - name: 🏃 Start application
+        run: |
+          npm run start &
+          sleep 10
+          curl --retry 10 --retry-delay 5 --retry-connrefused ${{ env.BASE_URL }}/api/health
+
+      - name: ⚡ Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun --config=lighthouse.config.js
+
+      - name: 📊 Upload Lighthouse reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: lighthouse-reports
+          path: |
+            lighthouse-reports/
+            .lighthouseci/
+
+  e2e-tests:
+    name: 🎭 E2E Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Restore dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 📋 Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: .next/
+
+      - name: 🎭 Install Playwright browsers
+        run: npx playwright install --with-deps ${{ matrix.project }}
+
+      - name: 🏃 Start application
+        run: |
+          npm run start &
+          sleep 15
+          curl --retry 15 --retry-delay 5 --retry-connrefused ${{ env.BASE_URL }}/api/health
+
+      - name: 🎭 Run Playwright tests
+        run: npx playwright test --project=${{ matrix.project }}
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.BASE_URL }}
+
+      - name: 📊 Upload E2E test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-test-results-${{ matrix.project }}
+          path: |
+            test-results/
+            playwright-report/
+
+  security-scan:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🔒 Run security audit
+        run: |
+          npm audit --audit-level high
+          npm run audit:licenses
+
+      - name: 🔍 CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+
+      - name: 🔍 Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  quality-gates:
+    name: 🚪 Quality Gates
+    runs-on: ubuntu-latest
+    needs: 
+      - lint-and-typecheck
+      - unit-tests
+      - integration-tests
+      - accessibility-tests
+      - performance-tests
+      - e2e-tests
+      - security-scan
+    if: always()
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📋 Download all test artifacts
+        uses: actions/download-artifact@v3
+
+      - name: 📊 Generate quality report
+        run: |
+          echo "# Quality Assurance Report" > qa-report.md
+          echo "Generated: $(date)" >> qa-report.md
+          echo "" >> qa-report.md
+          
+          # Check job statuses
+          echo "## Job Results" >> qa-report.md
+          echo "- Lint & TypeCheck: ${{ needs.lint-and-typecheck.result }}" >> qa-report.md
+          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> qa-report.md
+          echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> qa-report.md
+          echo "- Accessibility Tests: ${{ needs.accessibility-tests.result }}" >> qa-report.md
+          echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> qa-report.md
+          echo "- E2E Tests: ${{ needs.e2e-tests.result }}" >> qa-report.md
+          echo "- Security Scan: ${{ needs.security-scan.result }}" >> qa-report.md
+          echo "" >> qa-report.md
+          
+          # Test coverage analysis (if available)
+          if [ -f unit-test-results/coverage/coverage-summary.json ]; then
+            echo "## Test Coverage" >> qa-report.md
+            node -e "
+              const coverage = JSON.parse(require('fs').readFileSync('unit-test-results/coverage/coverage-summary.json', 'utf8'));
+              const total = coverage.total;
+              console.log('- Lines: ' + total.lines.pct + '%');
+              console.log('- Functions: ' + total.functions.pct + '%');
+              console.log('- Branches: ' + total.branches.pct + '%');
+              console.log('- Statements: ' + total.statements.pct + '%');
+            " >> qa-report.md
+            echo "" >> qa-report.md
+          fi
+
+      - name: 🚪 Check quality gates
+        run: |
+          # Define quality gate criteria
+          LINT_STATUS="${{ needs.lint-and-typecheck.result }}"
+          UNIT_STATUS="${{ needs.unit-tests.result }}"
+          INTEGRATION_STATUS="${{ needs.integration-tests.result }}"
+          ACCESSIBILITY_STATUS="${{ needs.accessibility-tests.result }}"
+          PERFORMANCE_STATUS="${{ needs.performance-tests.result }}"
+          E2E_STATUS="${{ needs.e2e-tests.result }}"
+          SECURITY_STATUS="${{ needs.security-scan.result }}"
+          
+          echo "Checking quality gates..."
+          
+          # All critical tests must pass
+          if [ "$LINT_STATUS" != "success" ]; then
+            echo "❌ Quality Gate FAILED: Linting errors detected"
+            exit 1
+          fi
+          
+          if [ "$UNIT_STATUS" != "success" ]; then
+            echo "❌ Quality Gate FAILED: Unit tests failed"
+            exit 1
+          fi
+          
+          if [ "$SECURITY_STATUS" != "success" ]; then
+            echo "❌ Quality Gate FAILED: Security vulnerabilities detected"
+            exit 1
+          fi
+          
+          # Other tests can have warnings but not failures
+          if [ "$INTEGRATION_STATUS" == "failure" ]; then
+            echo "❌ Quality Gate FAILED: Integration tests failed"
+            exit 1
+          fi
+          
+          if [ "$ACCESSIBILITY_STATUS" == "failure" ]; then
+            echo "❌ Quality Gate FAILED: Accessibility tests failed"
+            exit 1
+          fi
+          
+          if [ "$E2E_STATUS" == "failure" ]; then
+            echo "❌ Quality Gate FAILED: E2E tests failed"
+            exit 1
+          fi
+          
+          # Performance tests can be warnings
+          if [ "$PERFORMANCE_STATUS" == "failure" ]; then
+            echo "⚠️ Quality Gate WARNING: Performance tests failed"
+          fi
+          
+          echo "✅ Quality Gates PASSED"
+
+      - name: 📊 Upload quality report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: quality-report
+          path: qa-report.md
+
+      - name: 💬 Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const qaReport = fs.readFileSync('qa-report.md', 'utf8');
+            
+            const comment = `
+            ## 🤖 Quality Assurance Report
+            
+            ${qaReport}
+            
+            ---
+            *This report was automatically generated by the QA Pipeline*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  deploy-preview:
+    name: 🚀 Deploy Preview
+    runs-on: ubuntu-latest
+    needs: quality-gates
+    if: github.event_name == 'pull_request' && needs.quality-gates.result == 'success'
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📋 Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: .next/
+
+      - name: 🚀 Deploy to preview environment
+        run: |
+          echo "Deploying to preview environment..."
+          # This would integrate with your deployment system
+          echo "Preview URL: https://pr-${{ github.event.number }}.preview.pokeriq.com"
+
+      - name: 💬 Comment with preview URL
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `
+              ## 🚀 Preview Deployment Ready!
+              
+              Your changes have been deployed to: https://pr-${{ github.event.number }}.preview.pokeriq.com
+              
+              All quality gates have passed ✅
+              `
+            });
+
+  notify-results:
+    name: 📧 Notify Results
+    runs-on: ubuntu-latest
+    needs: 
+      - quality-gates
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: 📧 Send notification
+        env:
+          QA_RESULT: ${{ needs.quality-gates.result }}
+          WEBHOOK_URL: ${{ secrets.QA_WEBHOOK_URL }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ]; then
+            curl -X POST "$WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"text\": \"QA Pipeline completed with result: $QA_RESULT\",
+                \"branch\": \"${{ github.ref }}\",
+                \"commit\": \"${{ github.sha }}\",
+                \"author\": \"${{ github.actor }}\",
+                \"status\": \"$QA_RESULT\"
+              }"
+          fi
