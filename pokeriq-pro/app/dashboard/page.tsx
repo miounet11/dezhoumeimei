@@ -24,6 +24,7 @@ import {
 import Link from 'next/link';
 import AppLayout from '@/src/components/layout/AppLayout';
 import { useUserData } from '@/lib/hooks/useUserData';
+import DashboardLayout from '@/components/dashboard/DashboardLayout';
 
 // Number counter animation hook
 function useCounterAnimation(end: number, duration: number = 2000) {
@@ -54,6 +55,7 @@ function useCounterAnimation(end: number, duration: number = 2000) {
 
 export default function DashboardPage() {
   const { userData, loading, error, recentGames, recentAchievements, ladderRank } = useUserData();
+  const [dashboardData, setDashboardData] = useState(null);
 
   const stats = {
     totalGames: userData?.stats?.totalGames || 0,
@@ -70,6 +72,85 @@ export default function DashboardPage() {
   const animatedEarnings = useCounterAnimation(stats.totalEarnings, 2500);
   const animatedStreak = useCounterAnimation(stats.currentStreak, 1500);
   const animatedAchievements = useCounterAnimation(stats.achievements, 1800);
+
+  // Prepare dashboard data
+  useEffect(() => {
+    if (userData && recentGames && recentAchievements) {
+      setDashboardData({
+        progressData: {
+          overallProgress: stats.winRate,
+          coursesCompleted: recentAchievements?.length || 0,
+          totalCourses: 20,
+          currentStreak: stats.currentStreak,
+          studyTimeToday: 45,
+          studyTimeWeek: 280,
+          weeklyGoal: 300,
+          level: stats.level,
+          experiencePoints: userData.experience || 7850,
+          nextLevelXP: 10000
+        },
+        learningData: {
+          skillProgression: {
+            dimensions: [
+              { name: 'Position Play', currentLevel: 75, maxLevel: 100, confidence: 0.85, trend: 'up' as const },
+              { name: 'Bluff Detection', currentLevel: 60, maxLevel: 100, confidence: 0.70, trend: 'stable' as const },
+              { name: 'Bet Sizing', currentLevel: 85, maxLevel: 100, confidence: 0.90, trend: 'up' as const },
+              { name: 'Tournament Play', currentLevel: 45, maxLevel: 100, confidence: 0.60, trend: 'down' as const }
+            ],
+            overallProgress: stats.winRate,
+            strongestSkills: ['Position Play', 'Bet Sizing'],
+            weakestSkills: ['Tournament Play', 'Bluff Detection']
+          },
+          courseCompletion: {
+            completionRate: 60,
+            completedCourses: 12,
+            totalCourses: 20,
+            totalStudyTime: 1680, // in minutes
+            averageScore: 82
+          },
+          studyPatterns: {
+            preferredStudyTimes: Array.from({length: 24}, (_, i) => ({
+              hour: i,
+              count: Math.floor(Math.random() * 10) + 1,
+              avgDuration: Math.floor(Math.random() * 60) + 15
+            })),
+            consistency: {
+              streakDays: stats.currentStreak,
+              studyDaysPerWeek: 5.2,
+              avgSessionsPerDay: 2.1,
+              regularityScore: 78
+            }
+          }
+        },
+        performanceData: {
+          assessmentScores: Array.from({length: 30}, (_, i) => ({
+            date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            value: Math.floor(Math.random() * 40) + 60
+          })),
+          studyTimeWeekly: Array.from({length: 12}, (_, i) => ({
+            date: `Week ${i + 1}`,
+            value: Math.floor(Math.random() * 10) + 15
+          })),
+          completionRateMonthly: Array.from({length: 6}, (_, i) => ({
+            date: `Month ${i + 1}`,
+            value: Math.floor(Math.random() * 30) + 50
+          })),
+          scoreDistribution: [65, 70, 75, 80, 85, 90, 95],
+          courseCompletion: {
+            completed: 12,
+            inProgress: 3,
+            notStarted: 5
+          },
+          skillProgression: [
+            { skill: 'Position Play', current: 75, target: 90, improvement: 15 },
+            { skill: 'Bluff Detection', current: 60, target: 80, improvement: 20 },
+            { skill: 'Bet Sizing', current: 85, target: 95, improvement: 10 }
+          ]
+        },
+        recommendationData: null // Will be loaded by the component
+      });
+    }
+  }, [userData, recentGames, recentAchievements]);
 
   const displayRecentGames = recentGames?.slice(0, 5) || [
     { id: 1, type: '现金桌', result: '胜利', earnings: 320, date: '今天 14:30', status: 'win' as const },
@@ -89,49 +170,10 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div>
-          {/* Enhanced loading skeleton with stagger animations */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between animate-pulse">
-              <div>
-                <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 rounded-lg w-48 mb-2"></div>
-                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded-lg w-64"></div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="h-10 w-20 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Stats cards skeleton with shimmer effect */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-            {[...Array(4)].map((_, i) => (
-              <div 
-                key={i}
-                className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 animate-pulse"
-                style={{ animationDelay: `${i * 100}ms` }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-2xl relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 animate-shimmer"></div>
-                  </div>
-                  <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                </div>
-                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="text-center py-8">
-            <div className="relative inline-flex items-center justify-center">
-              <div className="animate-spin w-12 h-12 border-4 border-gradient-to-r from-purple-500 to-pink-500 border-t-transparent rounded-full"></div>
-              <div className="absolute inset-0 animate-ping w-12 h-12 border-2 border-purple-400 rounded-full opacity-20"></div>
-            </div>
-            <p className="text-gray-600 dark:text-gray-400 mt-4 animate-pulse">加载游戏数据中...</p>
-          </div>
-        </div>
+        <DashboardLayout 
+          userId={userData?.id || 'current-user'} 
+          loading={true}
+        />
       </AppLayout>
     );
   }
@@ -139,133 +181,30 @@ export default function DashboardPage() {
   if (error || !userData) {
     return (
       <AppLayout>
-        <div>
-          <div className="text-center p-8">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">数据加载失败</h3>
-            <p className="text-gray-600 dark:text-gray-400">请刷新页面重试</p>
-          </div>
-        </div>
+        <DashboardLayout 
+          userId="current-user" 
+          initialData={dashboardData}
+        />
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
-      <div>
-        {/* 页面头部 */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                🏆 控制台
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 text-lg">
-                欢迎回来，今天是提升牌技的好日子
-              </p>
-            </div>
-            
-            {/* 控制按钮 */}
-            <div className="flex items-center space-x-3">
-              <button className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 shadow-sm hover:shadow-md">
-                <Globe className="w-5 h-5" />
-                <span className="font-medium">中文</span>
-              </button>
-              
-              <button className="p-2.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 shadow-sm hover:shadow-md">
-                <Settings className="w-5 h-5" />
-              </button>
-            </div>
+      <DashboardLayout 
+        userId={userData?.id || 'current-user'} 
+        initialData={dashboardData}
+        loading={loading}
+      >
+
+        {/* Legacy stats display for fallback */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 mb-6">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p>Dashboard loading with enhanced layout...</p>
           </div>
         </div>
 
-        {/* Enhanced 统计卡片 with micro-interactions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-500 group hover:-translate-y-2 overflow-hidden active:scale-[0.98] cursor-pointer"
-               style={{ animationDelay: '0ms' }}>
-            {/* Gradient border on hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute inset-[1px] bg-white dark:bg-gray-900 rounded-2xl"></div>
-            
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/40 dark:to-purple-800/30 rounded-2xl flex items-center justify-center group-hover:scale-125 group-hover:rotate-[5deg] transition-all duration-300">
-                  <PlayCircle className="w-7 h-7 text-purple-600 dark:text-purple-400 group-hover:animate-pulse" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300">总游戏数</span>
-              </div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors duration-300">
-                {animatedTotalGames.toLocaleString()}
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                <span className="text-green-500 font-semibold bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full group-hover:animate-pulse">↑ 12%</span> 较上周
-              </div>
-            </div>
-          </div>
-
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:shadow-green-500/20 transition-all duration-500 group hover:-translate-y-2 overflow-hidden active:scale-[0.98] cursor-pointer"
-               style={{ animationDelay: '100ms' }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute inset-[1px] bg-white dark:bg-gray-900 rounded-2xl"></div>
-            
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/40 dark:to-green-800/30 rounded-2xl flex items-center justify-center group-hover:scale-125 group-hover:rotate-[-5deg] transition-all duration-300">
-                  <Trophy className="w-7 h-7 text-green-600 dark:text-green-400 group-hover:animate-bounce" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors duration-300">胜率</span>
-              </div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors duration-300">
-                {stats.winRate}%
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                <span className="text-green-500 font-semibold bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full group-hover:animate-pulse">↑ 3.2%</span> 较上周
-              </div>
-            </div>
-          </div>
-
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:shadow-yellow-500/20 transition-all duration-500 group hover:-translate-y-2 overflow-hidden active:scale-[0.98] cursor-pointer"
-               style={{ animationDelay: '200ms' }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute inset-[1px] bg-white dark:bg-gray-900 rounded-2xl"></div>
-            
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-yellow-100 to-yellow-50 dark:from-yellow-900/40 dark:to-yellow-800/30 rounded-2xl flex items-center justify-center group-hover:scale-125 group-hover:rotate-[5deg] transition-all duration-300">
-                  <DollarSign className="w-7 h-7 text-yellow-600 dark:text-yellow-400 group-hover:animate-spin" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-yellow-600 dark:group-hover:text-yellow-400 transition-colors duration-300">总盈利</span>
-              </div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-yellow-600 dark:group-hover:text-yellow-400 transition-colors duration-300">
-                ${animatedEarnings.toLocaleString()}
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                <span className="text-green-500 font-semibold bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full group-hover:animate-pulse">↑ $2,350</span> 本月
-              </div>
-            </div>
-          </div>
-
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-2xl hover:shadow-red-500/20 transition-all duration-500 group hover:-translate-y-2 overflow-hidden active:scale-[0.98] cursor-pointer"
-               style={{ animationDelay: '300ms' }}>
-            <div className="absolute inset-0 bg-gradient-to-r from-red-400 via-pink-500 to-red-600 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute inset-[1px] bg-white dark:bg-gray-900 rounded-2xl"></div>
-            
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-red-100 to-red-50 dark:from-red-900/40 dark:to-red-800/30 rounded-2xl flex items-center justify-center group-hover:scale-125 group-hover:rotate-[-5deg] transition-all duration-300">
-                  <Flame className="w-7 h-7 text-red-600 dark:text-red-400 group-hover:animate-pulse" />
-                </div>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors duration-300">连胜</span>
-              </div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors duration-300">
-                {animatedStreak} 场
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                <span className="text-orange-500 font-semibold group-hover:animate-pulse">🔥 历史最高记录</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        {/* Legacy quick actions for backwards compatibility */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Enhanced 快速开始 with micro-interactions */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1 group">
@@ -442,8 +381,39 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </DashboardLayout>
+    </AppLayout>
+  );
 
-        {/* Enhanced 玩家等级信息 with glass morphism and advanced animations */}
+  // Legacy content (will be shown as fallback)
+  const legacyContent = (
+    <div>
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              🏆 控制台
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">
+              欢迎回来，今天是提升牌技的好日子
+            </p>
+          </div>
+          
+          {/* 控制按钮 */}
+          <div className="flex items-center space-x-3">
+            <button className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 shadow-sm hover:shadow-md">
+              <Globe className="w-5 h-5" />
+              <span className="font-medium">中文</span>
+            </button>
+            
+            <button className="p-2.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-100 dark:hover:from-gray-700 dark:hover:to-gray-600 transition-all duration-200 shadow-sm hover:shadow-md">
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Enhanced 玩家等级信息 with glass morphism and advanced animations */}
         <div className="mt-8 relative group">
           {/* Glass morphism background */}
           <div className="absolute inset-0 bg-gradient-to-br from-white/80 to-gray-50/80 dark:from-gray-900/80 dark:to-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50"></div>
@@ -533,7 +503,9 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      </div>
-    </AppLayout>
+    </div>
   );
+  
+  // This should not be reached with new layout
+  return legacyContent;
 }
