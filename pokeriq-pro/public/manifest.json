@@ -4,11 +4,13 @@
   "description": "专业的德州扑克AI训练平台，提供GTO策略学习、实战训练和数据分析",
   "version": "1.0.1",
   "manifest_version": 3,
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0f172a",
   "theme_color": "#10b981",
   "orientation": "any",
+  "edge_side_panel": {"preferred_width": 400},
   "categories": ["games", "education", "sports"],
   "lang": "zh-CN",
   "dir": "ltr",
@@ -138,5 +140,120 @@
       "protocol": "web+poker",
       "url": "/game?type=%s"
     }
-  ]
+  ],
+  "file_handlers": [
+    {
+      "action": "/import",
+      "accept": {
+        "application/json": [".json"],
+        "text/plain": [".txt", ".log"]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "replay",
+          "accept": ["application/json", "text/plain"]
+        }
+      ]
+    }
+  },
+  "launch_handler": {
+    "client_mode": ["navigate-new", "navigate-existing"]
+  },
+  "handle_links": "preferred",
+  "capture_links": "new-client",
+  "scope_extensions": [
+    {"origin": "https://api.pokeriq.pro"},
+    {"origin": "https://cdn.pokeriq.pro"}
+  ],
+  "offline_enabled": true,
+  "categories_secondary": ["productivity", "utilities"],
+  "id": "/",
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "features": [
+    "cross-origin-isolated",
+    "offline-support",
+    "push-notifications",
+    "background-sync",
+    "web-share",
+    "file-handling",
+    "protocol-handling"
+  ],
+  "permissions": [
+    "notifications",
+    "background-sync",
+    "persistent-storage"
+  ],
+  "display_mode_override": {
+    "minimal-ui": {
+      "theme_color": "#0f172a",
+      "background_color": "#1e293b"
+    }
+  },
+  "widgets": [
+    {
+      "name": "Quick Stats",
+      "short_name": "Stats",
+      "description": "View your poker statistics at a glance",
+      "tag": "stats",
+      "template": "stats-widget",
+      "ms_ac_template": "stats-adaptive-card",
+      "data": "/api/widgets/stats",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/widgets/stats-light.png",
+          "sizes": "300x200",
+          "label": "Light theme stats widget"
+        },
+        {
+          "src": "/widgets/stats-dark.png",
+          "sizes": "300x200",
+          "label": "Dark theme stats widget"
+        }
+      ],
+      "icons": [
+        {
+          "src": "/icons/widget-stats.png",
+          "sizes": "64x64"
+        }
+      ],
+      "auth": false,
+      "update": 300
+    },
+    {
+      "name": "Training Progress",
+      "short_name": "Progress",
+      "description": "Track your training progress",
+      "tag": "progress",
+      "template": "progress-widget",
+      "data": "/api/widgets/progress",
+      "type": "application/json",
+      "icons": [
+        {
+          "src": "/icons/widget-progress.png",
+          "sizes": "64x64"
+        }
+      ],
+      "auth": true,
+      "update": 600
+    }
+  ],
+  "services": {
+    "analytics": {
+      "src": "/sw/analytics.js"
+    },
+    "push": {
+      "src": "/sw/push.js"
+    }
+  }
 }
