@@ -528,10 +528,10 @@ export class AchievementSystem {
 
     const completedCourses = userProgress.filter(p => p.completedAt).length;
     const totalHands = gameStats._sum.hands || 0;
-    const totalGames = gameStats._count || 0;
+    const totalGames = gameStats._count?.id || 0;
 
     return {
-      totalWins: Math.floor((userStats?.winRate || 0) * totalGames / 100),
+      totalWins: Math.floor((userStats?.winRate || 0) * (totalGames || 0) / 100),
       winStreak: userStats?.currentStreak || 0,
       totalHands,
       totalWinnings: userStats?.totalEarnings || 0,
