@@ -246,69 +246,276 @@ export class GTOEngine {
   }
 
   /**
-   * Calculate various action frequencies based on GTO principles
+   * Calculate various action frequencies using proper GTO analysis with CFR
    */
-  private calculateFoldFrequency(equity: number, potSize: number, toCall: number): number {
-    const potOdds = (toCall / (potSize + toCall)) * 100;
-    const requiredEquity = potOdds;
-    
-    if (equity < requiredEquity * 0.8) return 1.0; // Always fold
-    if (equity < requiredEquity) return 0.7; // Mostly fold
-    if (equity < requiredEquity * 1.2) return 0.3; // Sometimes fold
-    return 0; // Never fold
+  private async calculateGTOFrequencies(gameState: GameState): Promise<Map<string, number>> {
+    try {
+      // Import CFR solver dynamically to avoid circular dependencies
+      const { CFRSolver } = await import('./cfr-solver');
+      const cfrSolver = new CFRSolver(1000); // Use fewer iterations for real-time play
+      
+      const result = await cfrSolver.solve(gameState);
+      return result.strategy;
+    } catch (error) {
+      // Fallback to simplified heuristics if CFR fails
+      return this.calculateFallbackFrequencies(gameState);
+    }
   }
 
-  private calculateCheckFrequency(equity: number, position: Position): number {
-    const positionFactor = position === 'BTN' ? 0.3 : 0.7;
+  private calculateFallbackFrequencies(gameState: GameState): Map<string, number> {
+    const frequencies = new Map<string, number>();
     
-    if (equity < 30) return 0.9 * positionFactor;
-    if (equity < 50) return 0.6 * positionFactor;
-    if (equity < 70) return 0.4 * positionFactor;
-    return 0.2 * positionFactor;
+    // Get current player and calculate equity
+    const currentPlayer = gameState.players[gameState.currentPlayer];
+    const equity = this.calculateHandEquity(
+      this.parseCards(currentPlayer.holeCards),
+      this.parseCards(gameState.communityCards),
+      gameState.players.length - 1
+    );
+
+    const pot = gameState.pot;
+    const currentBet = Math.max(...gameState.players.map(p => p.invested));
+    const toCall = Math.max(0, currentBet - currentPlayer.invested);
+    const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
+    
+    // Advanced frequency calculations based on multiple factors
+    const position = currentPlayer.position;
+    const street = gameState.street;
+    const stackDepth = currentPlayer.stack / pot;
+    
+    // Position adjustments
+    const positionFactor = this.getPositionFactor(position);
+    const streetFactor = this.getStreetFactor(street);
+    const stackFactor = this.getStackDepthFactor(stackDepth);
+    
+    // Calculate fold frequency
+    if (toCall > 0) {
+      const requiredEquity = potOdds;
+      const adjustedEquity = equity * positionFactor * streetFactor;
+      
+      let foldFreq = 0;
+      if (adjustedEquity < requiredEquity * 0.7) foldFreq = 0.95;
+      else if (adjustedEquity < requiredEquity * 0.85) foldFreq = 0.8;
+      else if (adjustedEquity < requiredEquity) foldFreq = 0.6;
+      else if (adjustedEquity < requiredEquity * 1.2) foldFreq = 0.3;
+      else foldFreq = 0.1;
+      
+      frequencies.set('fold', foldFreq);
+    }
+
+    // Calculate call frequency  
+    if (toCall > 0) {
+      const callFreq = Math.max(0, Math.min(0.8, 
+        equity / (potOdds * 100) * positionFactor - 0.2
+      ));
+      frequencies.set('call', callFreq);
+    } else {
+      // Check frequency when no bet to call
+      const checkFreq = Math.max(0.1, 0.9 - equity * positionFactor);
+      frequencies.set('check', checkFreq);
+    }
+
+    // Calculate bet/raise frequency
+    const aggression = this.calculateOptimalAggression(equity, position, street, stackDepth);
+    
+    if (toCall === 0) {
+      // Betting frequency
+      const betFreq = Math.min(0.9, aggression * streetFactor * stackFactor);
+      frequencies.set('bet', betFreq);
+    } else {
+      // Raising frequency
+      const raiseFreq = Math.min(0.7, aggression * 0.7 * positionFactor);
+      frequencies.set('raise', raiseFreq);
+    }
+
+    // Normalize frequencies to sum to 1
+    return this.normalizeFrequencies(frequencies);
   }
 
-  private calculateCallFrequency(equity: number, potSize: number, toCall: number): number {
-    const potOdds = (toCall / (potSize + toCall)) * 100;
-    const requiredEquity = potOdds;
-    
-    if (equity < requiredEquity * 0.8) return 0;
-    if (equity < requiredEquity) return 0.2;
-    if (equity < requiredEquity * 1.5) return 0.8;
-    return 0.6; // Sometimes call even with strong hands for deception
+  private async calculateHandEquity(holeCards: Card[], communityCards: Card[] = [], opponents: number = 1): Promise<number> {
+    // Use more sophisticated equity calculation
+    try {
+      const { calculateEquity } = await import('@/lib/utils/poker');
+      const result = calculateEquity(holeCards, communityCards, opponents, 5000);
+      return result.equity;
+    } catch {
+      // Fallback to simple calculation
+      return this.calculateSimpleEquity(holeCards, communityCards, opponents);
+    }
   }
 
-  private calculateBetFrequency(
-    equity: number, 
-    position: Position, 
-    street: 'preflop' | 'flop' | 'turn' | 'river'
-  ): number {
-    const positionMultiplier = position === 'BTN' ? 1.2 : position === 'CO' ? 1.1 : 1.0;
-    
-    let baseBetFrequency = 0;
-    
-    if (equity > 80) baseBetFrequency = 0.9; // Almost always bet with very strong hands
-    else if (equity > 65) baseBetFrequency = 0.7; // Frequently bet with strong hands
-    else if (equity > 45) baseBetFrequency = 0.4; // Sometimes bet with medium hands
-    else if (equity > 25) baseBetFrequency = 0.2; // Occasionally bluff
-    else baseBetFrequency = 0.1; // Rarely bluff with weak hands
-
-    // Adjust for street
-    const streetMultiplier = {
-      preflop: 1.0,
-      flop: 0.9,
-      turn: 0.8,
-      river: 0.7
-    }[street];
-
-    return Math.min(baseBetFrequency * positionMultiplier * streetMultiplier, 1.0);
+  private calculateSimpleEquity(holeCards: Card[], communityCards: Card[], opponents: number): number {
+    // Simplified equity calculation based on hand strength
+    const handStrength = this.evaluateHandStrength(holeCards, communityCards);
+    const opponentAdjustment = Math.pow(0.85, opponents - 1);
+    return Math.min(0.95, handStrength * opponentAdjustment);
   }
 
-  private calculateRaiseFrequency(equity: number, position: Position): number {
-    if (equity > 85) return 0.8; // Usually raise with very strong hands
-    if (equity > 70) return 0.6; // Often raise with strong hands
-    if (equity > 50) return 0.3; // Sometimes raise with decent hands
-    if (equity > 30) return 0.1; // Rarely raise as bluff
-    return 0; // Never raise with weak hands
+  private evaluateHandStrength(holeCards: Card[], communityCards: Card[]): number {
+    const allCards = [...holeCards, ...communityCards];
+    if (allCards.length < 2) return 0.1;
+
+    // Advanced hand evaluation considering:
+    // 1. Pairs, trips, quads
+    // 2. Flush possibilities  
+    // 3. Straight possibilities
+    // 4. High card strength
+    
+    const ranks = allCards.map(c => this.getCardRank(c.rank));
+    const suits = allCards.map(c => c.suit);
+    
+    const rankCounts = ranks.reduce((acc, rank) => {
+      acc[rank] = (acc[rank] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>);
+    
+    const suitCounts = suits.reduce((acc, suit) => {
+      acc[suit] = (acc[suit] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    let strength = 0;
+
+    // Check for pairs, trips, quads
+    const maxRankCount = Math.max(...Object.values(rankCounts));
+    if (maxRankCount >= 4) strength = 0.95; // Quads
+    else if (maxRankCount >= 3) {
+      const pairs = Object.values(rankCounts).filter(c => c >= 2).length;
+      strength = pairs > 1 ? 0.9 : 0.8; // Full house or trips
+    } else if (maxRankCount >= 2) {
+      const pairs = Object.values(rankCounts).filter(c => c >= 2).length;
+      strength = pairs > 1 ? 0.7 : 0.6; // Two pair or pair
+    }
+
+    // Check for flush
+    const maxSuitCount = Math.max(...Object.values(suitCounts));
+    if (maxSuitCount >= 5) strength = Math.max(strength, 0.85);
+    else if (maxSuitCount >= 4) strength = Math.max(strength, 0.4); // Flush draw
+
+    // Check for straight
+    if (this.hasStraight(ranks)) strength = Math.max(strength, 0.75);
+    else if (this.hasStraightDraw(ranks)) strength = Math.max(strength, 0.35);
+
+    // High card strength
+    if (strength === 0) {
+      const highCard = Math.max(...ranks);
+      strength = Math.min(0.5, highCard / 28); // Normalize ace=14 to 0.5
+    }
+
+    return strength;
+  }
+
+  private getCardRank(rank: string): number {
+    const rankMap: Record<string, number> = {
+      '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+      '9': 9, 'T': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14
+    };
+    return rankMap[rank] || 2;
+  }
+
+  private hasStraight(ranks: number[]): boolean {
+    const uniqueRanks = Array.from(new Set(ranks)).sort((a, b) => a - b);
+    if (uniqueRanks.length < 5) return false;
+
+    for (let i = 0; i <= uniqueRanks.length - 5; i++) {
+      let consecutive = true;
+      for (let j = 1; j < 5; j++) {
+        if (uniqueRanks[i + j] !== uniqueRanks[i] + j) {
+          consecutive = false;
+          break;
+        }
+      }
+      if (consecutive) return true;
+    }
+
+    // Check for A-2-3-4-5 straight
+    if (uniqueRanks.includes(14) && uniqueRanks.includes(2) && 
+        uniqueRanks.includes(3) && uniqueRanks.includes(4) && uniqueRanks.includes(5)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private hasStraightDraw(ranks: number[]): boolean {
+    const uniqueRanks = Array.from(new Set(ranks)).sort((a, b) => a - b);
+    if (uniqueRanks.length < 4) return false;
+
+    // Check for open-ended straight draws
+    for (let i = 0; i <= uniqueRanks.length - 4; i++) {
+      let consecutive = 0;
+      for (let j = 0; j < 4; j++) {
+        if (j === 0 || uniqueRanks[i + j] === uniqueRanks[i + j - 1] + 1) {
+          consecutive++;
+        } else {
+          break;
+        }
+      }
+      if (consecutive === 4) return true;
+    }
+
+    return false;
+  }
+
+  private getPositionFactor(position: string): number {
+    const factors: Record<string, number> = {
+      'UTG': 0.8, 'MP': 0.9, 'CO': 1.0, 'BTN': 1.2, 'SB': 0.85, 'BB': 0.9
+    };
+    return factors[position] || 1.0;
+  }
+
+  private getStreetFactor(street: string): number {
+    const factors: Record<string, number> = {
+      'preflop': 1.0, 'flop': 0.95, 'turn': 0.9, 'river': 0.85
+    };
+    return factors[street] || 1.0;
+  }
+
+  private getStackDepthFactor(stackDepth: number): number {
+    if (stackDepth > 2) return 1.0;      // Deep stacks
+    if (stackDepth > 1) return 0.9;      // Medium stacks  
+    if (stackDepth > 0.5) return 0.8;    // Shallow stacks
+    return 0.7;                          // Very shallow
+  }
+
+  private calculateOptimalAggression(equity: number, position: string, street: string, stackDepth: number): number {
+    const baseAggression = equity > 0.8 ? 0.9 :
+                          equity > 0.6 ? 0.7 :
+                          equity > 0.4 ? 0.4 :
+                          equity > 0.2 ? 0.2 : 0.1;
+    
+    const positionBonus = this.getPositionFactor(position) - 1.0;
+    const streetPenalty = 1.0 - this.getStreetFactor(street);
+    const stackBonus = this.getStackDepthFactor(stackDepth) - 0.7;
+    
+    return Math.max(0.05, Math.min(0.95, 
+      baseAggression + positionBonus * 0.1 - streetPenalty * 0.2 + stackBonus * 0.1
+    ));
+  }
+
+  private normalizeFrequencies(frequencies: Map<string, number>): Map<string, number> {
+    const total = Array.from(frequencies.values()).reduce((sum, freq) => sum + freq, 0);
+    if (total === 0) return frequencies;
+    
+    const normalized = new Map<string, number>();
+    for (const [action, freq] of frequencies) {
+      normalized.set(action, freq / total);
+    }
+    return normalized;
+  }
+
+  private parseCards(cardsString: string): Card[] {
+    // Parse card string format like "AsKh" into Card objects
+    const cards: Card[] = [];
+    for (let i = 0; i < cardsString.length; i += 2) {
+      if (i + 1 < cardsString.length) {
+        cards.push({
+          rank: cardsString[i],
+          suit: cardsString[i + 1]
+        });
+      }
+    }
+    return cards;
   }
 
   /**

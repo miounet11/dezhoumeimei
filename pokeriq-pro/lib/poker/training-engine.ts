@@ -127,7 +127,7 @@ export class TrainingEngine {
   }
 
   /**
-   * 生成训练手牌 (增强版)
+   * 生成训练手牌 (增强版) - 集成个性化推荐
    */
   async generateTrainingHand(): Promise<TrainingHand> {
     if (!this.session) {
@@ -137,14 +137,21 @@ export class TrainingEngine {
     const handNumber = this.session.hands.length + 1;
 
     try {
-      // 使用GTO引擎生成训练场景
-      const trainingScenario = await this.gtoEngine.generateTrainingScenario(
+      // 获取用户画像进行个性化调整
+      const userProfile = await this.getUserProfile(this.session.userId);
+      
+      // 使用GTO引擎生成训练场景，考虑个性化因素
+      const trainingScenario = await this.gtoEngine.generatePersonalizedScenario(
         this.session.scenario, 
-        this.session.difficulty as any
+        this.session.difficulty as any,
+        userProfile
       );
 
       // 转换为TrainingHand格式
       const hand = this.convertScenarioToHand(trainingScenario, handNumber);
+      
+      // 根据用户学习风格调整手牌参数
+      this.adjustHandForLearningStyle(hand, userProfile.learningStyle);
       
       this.currentHand = hand;
       this.session.hands.push(hand);
@@ -154,6 +161,138 @@ export class TrainingEngine {
       logger.warn('Failed to generate GTO-based training hand, falling back to legacy method:', error);
       return this.generateLegacyTrainingHand();
     }
+  }
+
+  /**
+   * 获取用户画像
+   */
+  private async getUserProfile(userId: string): Promise<any> {
+    try {
+      // 获取用户最近的训练记录
+      const recentSessions = await this.getRecentTrainingSessions(userId, 20);
+      
+      // 使用用户画像分析器
+      const { UserProfiler } = await import('@/lib/personalization/user-profiler');
+      const profiler = new UserProfiler();
+      
+      return await profiler.analyzeUserProfile(userId, recentSessions);
+    } catch (error) {
+      logger.warn('Failed to get user profile, using default:', error);
+      return this.getDefaultUserProfile(userId);
+    }
+  }
+
+  /**
+   * 获取最近训练会话 - 模拟实现
+   */
+  private async getRecentTrainingSessions(userId: string, count: number): Promise<any[]> {
+    // 这里应该从数据库获取，现在返回模拟数据
+    return [];
+  }
+
+  /**
+   * 获取默认用户画像
+   */
+  private getDefaultUserProfile(userId: string): any {
+    return {
+      userId,
+      skillDimensions: {
+        preflop: { current: 1000, confidence: 0.3 },
+        postflop: { current: 1000, confidence: 0.3 },
+        psychology: { current: 1000, confidence: 0.3 },
+        mathematics: { current: 1000, confidence: 0.3 },
+        bankroll: { current: 1000, confidence: 0.3 },
+        tournament: { current: 1000, confidence: 0.3 }
+      },
+      learningStyle: {
+        visualLearner: 0.25,
+        practicalLearner: 0.25,
+        theoreticalLearner: 0.25,
+        socialLearner: 0.25
+      },
+      weaknessPatterns: [],
+      overallRating: 1000
+    };
+  }
+
+  /**
+   * 根据学习风格调整手牌
+   */
+  private adjustHandForLearningStyle(hand: TrainingHand, learningStyle: any): void {
+    // 视觉学习者 - 提供更详细的牌面描述
+    if (learningStyle.visualLearner > 0.6) {
+      hand.explanation += ' [可视化提示: 观察牌面纹理和对手行为模式]';
+    }
+
+    // 实践学习者 - 强调实际应用
+    if (learningStyle.practicalLearner > 0.6) {
+      hand.explanation += ' [实践要点: 在实战中如何应用这个概念]';
+    }
+
+    // 理论学习者 - 添加数学分析
+    if (learningStyle.theoreticalLearner > 0.6) {
+      const equity = this.calculateSimpleEquity(hand.holeCards, hand.communityCards);
+      hand.explanation += ` [理论分析: 手牌胜率约${(equity * 100).toFixed(1)}%]`;
+    }
+
+    // 社交学习者 - 强调对手心理
+    if (learningStyle.socialLearner > 0.6) {
+      hand.explanation += ' [心理博弈: 考虑对手的思维过程和可能反应]';
+    }
+  }
+
+  /**
+   * 计算简单胜率
+   */
+  private calculateSimpleEquity(holeCards: string, communityCards: string): number {
+    // 简化实现 - 基于手牌强度估算
+    const holeStrength = this.evaluateHoleCards(holeCards);
+    const communityBonus = communityCards.length * 0.1;
+    return Math.min(0.9, holeStrength + communityBonus);
+  }
+
+  /**
+   * 评估起手牌强度
+   */
+  private evaluateHoleCards(holeCards: string): number {
+    if (!holeCards || holeCards.length < 2) return 0.2;
+    
+    // 提取牌面信息 (简化)
+    const ranks = holeCards.match(/[AKQJT23456789]/g) || [];
+    const suits = holeCards.match(/[♠♥♦♣]/g) || [];
+    
+    if (ranks.length < 2) return 0.2;
+    
+    const rankValues = ranks.map(r => {
+      const map: Record<string, number> = {
+        'A': 14, 'K': 13, 'Q': 12, 'J': 11, 'T': 10,
+        '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2
+      };
+      return map[r] || 2;
+    });
+
+    // 对子检测
+    if (rankValues[0] === rankValues[1]) {
+      if (rankValues[0] >= 10) return 0.85; // 高对
+      if (rankValues[0] >= 7) return 0.65;  // 中对
+      return 0.45; // 小对
+    }
+
+    // 同花检测
+    const suited = suits.length >= 2 && suits[0] === suits[1];
+    const gap = Math.abs(rankValues[0] - rankValues[1]);
+    
+    // 高牌力量
+    const maxRank = Math.max(...rankValues);
+    const minRank = Math.min(...rankValues);
+    
+    let strength = (maxRank + minRank) / 28; // 基础强度
+    
+    if (suited) strength += 0.1; // 同花加成
+    if (gap <= 4 && minRank >= 5) strength += 0.05; // 顺子潜力
+    if (maxRank === 14) strength += 0.1; // A牌加成
+    
+    return Math.min(0.8, Math.max(0.1, strength));
   }
 
   /**
