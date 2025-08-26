@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const { withBundleOptimization } = require('./lib/performance/bundle-optimizer');
+
 const nextConfig = {
   // 启用React严格模式
   reactStrictMode: true,
@@ -32,6 +34,10 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 31536000, // 1 year
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    unoptimized: false,
+    loader: 'default',
   },
   
   // PWA配置（用于移动端Web App）
@@ -60,6 +66,16 @@ const nextConfig = {
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=63072000; includeSubDomains; preload',
+          },
+          // Performance optimizations
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          // Resource hints
+          {
+            key: 'Link',
+            value: '</fonts/inter.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
           },
         ],
       },
@@ -94,7 +110,11 @@ const nextConfig = {
       static: 180, // 静态页面缓存时间
     },
     // 优化打包
-    optimizePackageImports: ['antd', 'lodash', 'socket.io-client', 'lucide-react', 'framer-motion'],
+    optimizePackageImports: ['antd', 'lodash', 'socket.io-client', 'lucide-react', 'framer-motion', 'recharts', '@heroicons/react'],
+    // 启用并发特性
+    concurrentFeatures: true,
+    // 启用应用目录
+    appDir: true,
     // 边缘运行时优化
     allowedRevalidateHeaderKeys: ['x-revalidate-tag'],
     // 优化客户端导航
@@ -195,4 +215,5 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// Apply advanced bundle optimization
+module.exports = withBundleOptimization(nextConfig);
