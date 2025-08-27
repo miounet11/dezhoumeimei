@@ -17,7 +17,7 @@ import {
 // Bandwidth and Quality Detection
 // ==========================================================================
 
-export class BandwidthMonitor {
+class BandwidthMonitor {
   private measurements: number[] = [];
   private maxMeasurements = 10;
   private testStartTime = 0;
@@ -98,7 +98,7 @@ export class BandwidthMonitor {
 // HLS/DASH Player Support
 // ==========================================================================
 
-export class AdaptiveStreamingPlayer {
+class AdaptiveStreamingPlayer {
   private video: HTMLVideoElement;
   private hls: any = null; // HLS.js instance
   private dashPlayer: any = null; // DASH.js instance
@@ -456,7 +456,7 @@ export class AdaptiveStreamingPlayer {
 // Chapter and Navigation Support
 // ==========================================================================
 
-export class ChapterManager {
+class ChapterManager {
   private chapters: ChapterMarker[] = [];
   private currentChapter: ChapterMarker | null = null;
   private onChapterChangeCallbacks: ((chapter: ChapterMarker | null) => void)[] = [];
@@ -509,7 +509,7 @@ export class ChapterManager {
 // Progress Tracking and Resume
 // ==========================================================================
 
-export class ProgressTracker {
+class ProgressTracker {
   private courseId: string;
   private userId: string;
   private contentBlockId: string;

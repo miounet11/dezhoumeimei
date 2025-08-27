@@ -111,10 +111,7 @@ const nextConfig = {
     },
     // 优化打包
     optimizePackageImports: ['antd', 'lodash', 'socket.io-client', 'lucide-react', 'framer-motion', 'recharts', '@heroicons/react'],
-    // 启用并发特性
-    concurrentFeatures: true,
-    // 启用应用目录
-    appDir: true,
+    // Note: concurrentFeatures and appDir are now stable in Next.js 15
     // 边缘运行时优化
     allowedRevalidateHeaderKeys: ['x-revalidate-tag'],
     // 优化客户端导航

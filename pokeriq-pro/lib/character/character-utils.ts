@@ -489,7 +489,7 @@ export class CharacterUtils {
 /**
  * Character state management utilities
  */
-export class CharacterStateManager {
+class CharacterStateManager {
   
   /**
    * Track character interaction metrics

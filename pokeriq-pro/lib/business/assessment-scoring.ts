@@ -68,7 +68,7 @@ export interface PerformanceMetrics {
 // Core Scoring Engine
 // ========================================================================
 
-export class AssessmentScoringEngine {
+class AssessmentScoringEngine {
   /**
    * Calculate comprehensive assessment score using weighted algorithm
    */
@@ -546,7 +546,7 @@ export class AssessmentScoringEngine {
 // Performance Analysis Engine
 // ========================================================================
 
-export class PerformanceAnalyzer {
+class PerformanceAnalyzer {
   /**
    * Analyze user performance across multiple assessments
    */
@@ -725,7 +725,7 @@ export class PerformanceAnalyzer {
 // Adaptive Scoring System
 // ========================================================================
 
-export class AdaptiveScoring {
+class AdaptiveScoring {
   /**
    * Adjust scoring based on user's historical performance
    */

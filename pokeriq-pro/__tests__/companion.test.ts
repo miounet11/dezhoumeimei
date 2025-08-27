@@ -1,7 +1,8 @@
 import { CompanionService } from '@/lib/services/companion.service';
 import prisma from '@/lib/db/prisma';
+import QueryOptimizer from '@/lib/database/query-optimizer';
 
-// Mock Prisma
+// Mock Prisma and QueryOptimizer
 jest.mock('@/lib/db/prisma', () => ({
   __esModule: true,
   default: {
@@ -51,6 +52,14 @@ jest.mock('@/lib/db/prisma', () => ({
   },
 }));
 
+jest.mock('@/lib/database/query-optimizer', () => ({
+  __esModule: true,
+  default: {
+    executeWithMonitoring: jest.fn(),
+    getUserCompanionsOptimized: jest.fn(),
+  },
+}));
+
 describe('CompanionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -75,14 +84,16 @@ describe('CompanionService', () => {
         },
       ];
 
-      (prisma.aICompanion.findMany as jest.Mock).mockResolvedValue(mockCompanions);
+      (QueryOptimizer.executeWithMonitoring as jest.Mock).mockResolvedValue({
+        data: mockCompanions
+      });
 
       const result = await CompanionService.getAllCompanions();
 
-      expect(prisma.aICompanion.findMany).toHaveBeenCalledWith({
-        where: { isActive: true },
-        orderBy: { basePrice: 'asc' },
-      });
+      expect(QueryOptimizer.executeWithMonitoring).toHaveBeenCalledWith(
+        'getAllCompanions',
+        expect.any(Function)
+      );
       expect(result).toEqual(mockCompanions);
     });
   });
@@ -110,29 +121,13 @@ describe('CompanionService', () => {
         },
       ];
 
-      (prisma.userCompanion.findMany as jest.Mock).mockResolvedValue(mockUserCompanions);
+      (QueryOptimizer.getUserCompanionsOptimized as jest.Mock).mockResolvedValue({
+        data: mockUserCompanions
+      });
 
       const result = await CompanionService.getUserCompanions('user1');
 
-      expect(prisma.userCompanion.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user1' },
-        include: {
-          companion: true,
-          interactions: {
-            orderBy: { createdAt: 'desc' },
-            take: 10,
-          },
-          gifts: {
-            orderBy: { createdAt: 'desc' },
-            take: 10,
-          },
-          memories: {
-            orderBy: { createdAt: 'desc' },
-            take: 5,
-          },
-        },
-        orderBy: { isPrimary: 'desc' },
-      });
+      expect(QueryOptimizer.getUserCompanionsOptimized).toHaveBeenCalledWith('user1');
       expect(result).toEqual(mockUserCompanions);
     });
   });
