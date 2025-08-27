@@ -255,6 +255,16 @@ export default function DashboardPage() {
                   </span>
                 </button>
               </Link>
+              
+              <Link href="/personalization" className="block">
+                <button className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-100 dark:hover:from-blue-900/20 dark:hover:to-purple-800/20 transition-all duration-300 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-purple-600 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] group/btn">
+                  <div className="flex items-center space-x-3">
+                    <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover/btn:animate-pulse" />
+                    <span className="font-medium text-gray-700 dark:text-gray-300 group-hover/btn:text-blue-700 dark:group-hover/btn:text-purple-300 transition-colors duration-300">个性化中心</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover/btn:text-blue-600 group-hover/btn:translate-x-1 transition-all duration-300" />
+                </button>
+              </Link>
             </div>
           </div>
 

@@ -59,6 +59,13 @@ model User {
   leaderboardEntries LeaderboardEntry[]
   testSessions       TestSession[]
   ladderRank         LadderRank?
+  
+  // Personalization relationships
+  preferences            UserPreferences?
+  personalizationProfile PersonalizationProfile?
+  recommendationHistory  RecommendationHistory[]
+  learningPaths          LearningPath[]
+  abTestParticipations   ABTestParticipation[]
 
   @@index([email])
   @@index([username])
@@ -1424,4 +1431,271 @@ enum CharacterStyle {
   FORMAL
   DIRECT
   HUMOROUS
+}
+
+// ==========================================================================
+// 个性化系统 - Personalization System (Issue #10)
+// ==========================================================================
+
+// 用户偏好设置
+model UserPreferences {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 学习风格偏好 (0-1)
+  visualLearner      Float @default(0.25) @db.DoublePrecision
+  practicalLearner   Float @default(0.25) @db.DoublePrecision
+  theoreticalLearner Float @default(0.25) @db.DoublePrecision
+  socialLearner      Float @default(0.25) @db.DoublePrecision
+
+  // 学习目标和难度偏好
+  learningGoals     Json     @default("[]") @db.JsonB // 学习目标列表
+  preferredDifficulty Int?   @db.SmallInt // 偏好难度 1-5
+  timeAvailability    Int    @default(30) // 每日可用时间(分钟)
+  sessionLength       Int    @default(20) // 单次训练时长(分钟)
+
+  // 游戏偏好
+  preferredGameTypes Json @default("[\"cash\"]") @db.JsonB // 偏好的游戏类型
+  stakesPreference   Json @default("{}") @db.JsonB // 注码偏好
+  positionPreference Json @default("{}") @db.JsonB // 位置偏好
+
+  // 反馈偏好
+  feedbackStyle      String  @default("detailed") @db.VarChar(20) // detailed/simple/minimal
+  encouragementLevel Float   @default(0.7) @db.DoublePrecision // 鼓励程度
+  challengeLevel     Float   @default(0.5) @db.DoublePrecision // 挑战程度
+
+  // 通知偏好
+  trainingReminders  Boolean @default(true)
+  weeklyReports      Boolean @default(true)
+  achievementNotifs  Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+  updatedAt DateTime @updatedAt @db.Timestamp(3)
+
+  @@index([userId])
+  @@map("user_preferences")
+}
+
+// 个性化用户画像
+model PersonalizationProfile {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 技能水平评估 (0-2000 ELO评分)
+  preflopSkill     Int   @default(1000) @db.SmallInt
+  postflopSkill    Int   @default(1000) @db.SmallInt
+  psychologySkill  Int   @default(1000) @db.SmallInt
+  mathematicsSkill Int   @default(1000) @db.SmallInt
+  bankrollSkill    Int   @default(1000) @db.SmallInt
+  tournamentSkill  Int   @default(1000) @db.SmallInt
+
+  // 技能置信度 (0-1)
+  preflopConfidence     Float @default(0.1) @db.DoublePrecision
+  postflopConfidence    Float @default(0.1) @db.DoublePrecision
+  psychologyConfidence  Float @default(0.1) @db.DoublePrecision
+  mathematicsConfidence Float @default(0.1) @db.DoublePrecision
+  bankrollConfidence    Float @default(0.1) @db.DoublePrecision
+  tournamentConfidence  Float @default(0.1) @db.DoublePrecision
+
+  // 技能趋势 (正负百分比)
+  preflopTrend     Float @default(0) @db.DoublePrecision
+  postflopTrend    Float @default(0) @db.DoublePrecision
+  psychologyTrend  Float @default(0) @db.DoublePrecision
+  mathematicsTrend Float @default(0) @db.DoublePrecision
+  bankrollTrend    Float @default(0) @db.DoublePrecision
+  tournamentTrend  Float @default(0) @db.DoublePrecision
+
+  // 综合评分和统计
+  overallRating   Int   @default(1000) @db.SmallInt
+  totalSampleSize Int   @default(0) // 总样本数
+  dataQuality     Float @default(0.1) @db.DoublePrecision // 数据质量评分
+
+  // 弱点模式 (JSON存储详细分析)
+  weaknessPatterns Json @default("[]") @db.JsonB // WeaknessPattern[]
+  strengthAreas    Json @default("[]") @db.JsonB // 强项领域
+
+  // 学习特性分析
+  learningVelocity    Float @default(10) @db.DoublePrecision // 学习速度 (点/小时)
+  consistencyScore    Float @default(0.5) @db.DoublePrecision // 一致性
+  adaptabilityScore   Float @default(0.5) @db.DoublePrecision // 适应性
+  retentionRate       Float @default(0.7) @db.DoublePrecision // 知识保持率
+
+  // 游戏风格分析
+  playStyle          String @default("balanced") @db.VarChar(30) // tight/loose/aggressive/passive/balanced
+  riskTolerance      Float  @default(0.5) @db.DoublePrecision
+  bluffingTendency   Float  @default(0.3) @db.DoublePrecision
+  valueExtraction    Float  @default(0.5) @db.DoublePrecision
+
+  // 时间戳
+  lastAssessment DateTime @default(now()) @db.Timestamp(3)
+  createdAt      DateTime @default(now()) @db.Timestamp(3)
+  updatedAt      DateTime @updatedAt @db.Timestamp(3)
+
+  @@index([userId])
+  @@index([overallRating])
+  @@index([lastAssessment])
+  @@map("personalization_profiles")
+}
+
+// 推荐历史记录
+model RecommendationHistory {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 推荐信息
+  recommendationId   String @db.VarChar(100) // 推荐ID
+  title              String @db.VarChar(255)
+  description        String @db.Text
+  scenario           String @db.VarChar(100) // 训练场景
+  difficulty         Int    @db.SmallInt // 难度1-5
+  estimatedTime      Int    @db.SmallInt // 预计时间(分钟)
+  expectedImprovement Int   @db.SmallInt // 预期提升点数
+
+  // 推荐上下文
+  recommendationReason String @db.Text // 推荐理由
+  skillFocus          Json   @db.JsonB // 目标技能 string[]
+  userContext         Json   @db.JsonB // 用户当时的上下文
+  algorithmVersion    String @default("1.0") @db.VarChar(10)
+
+  // 用户反馈
+  wasAccepted    Boolean? // 是否接受推荐
+  userRating     Int?     @db.SmallInt // 用户评分 1-5
+  completionTime Int?     @db.SmallInt // 实际完成时间
+  actualImprovement Int?  @db.SmallInt // 实际提升
+
+  // 效果评估
+  effectiveness      Float? @db.DoublePrecision // 推荐效果评分
+  accuracyScore      Float? @db.DoublePrecision // 准确性评分
+  satisfactionScore  Float? @db.DoublePrecision // 满意度评分
+
+  // 状态追踪
+  status        RecommendationStatus @default(PENDING)
+  presentedAt   DateTime             @default(now()) @db.Timestamp(3)
+  respondedAt   DateTime?            @db.Timestamp(3)
+  completedAt   DateTime?            @db.Timestamp(3)
+
+  @@index([userId, status])
+  @@index([scenario, presentedAt])
+  @@index([effectiveness])
+  @@map("recommendation_history")
+}
+
+// 个性化学习路径
+model LearningPath {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 路径基本信息
+  planId              String @unique @db.VarChar(100) // 计划ID
+  title               String @db.VarChar(255)
+  description         String @db.Text
+  targetRating        Int    @db.SmallInt // 目标评分
+  estimatedDuration   Int    @db.SmallInt // 预计总时长(小时)
+  difficulty          Int    @db.SmallInt // 整体难度1-5
+
+  // 路径内容
+  recommendations     Json @db.JsonB // TrainingRecommendation[]
+  milestones         Json @db.JsonB // PlanMilestone[]
+  currentPosition    Int  @default(0) @db.SmallInt // 当前进度位置
+
+  // 进度追踪
+  completedRecommendations Int   @default(0) @db.SmallInt
+  totalRecommendations     Int   @db.SmallInt
+  completionRate           Float @default(0) @db.DoublePrecision
+  timeSpent                Int   @default(0) @db.SmallInt // 已用时间(分钟)
+
+  // 效果评估
+  initialRating       Int?   @db.SmallInt // 开始时评分
+  currentRating       Int?   @db.SmallInt // 当前评分
+  actualImprovement   Int?   @db.SmallInt // 实际提升
+  expectedImprovement Int    @db.SmallInt // 预期提升
+
+  // 适应性调整
+  adaptationCount     Int     @default(0) @db.SmallInt // 调整次数
+  lastAdaptation      DateTime? @db.Timestamp(3)
+  adaptationReason    String? @db.Text
+
+  // 状态管理
+  status    LearningPathStatus @default(ACTIVE)
+  priority  Int                @default(5) @db.SmallInt // 优先级1-10
+  isCustom  Boolean            @default(false) // 是否自定义路径
+
+  // 时间戳
+  createdAt   DateTime  @default(now()) @db.Timestamp(3)
+  startedAt   DateTime? @db.Timestamp(3)
+  completedAt DateTime? @db.Timestamp(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamp(3)
+
+  @@index([userId, status])
+  @@index([planId])
+  @@index([createdAt])
+  @@map("learning_paths")
+}
+
+// AB测试参与记录
+model ABTestParticipation {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 实验信息
+  experimentId      String @db.VarChar(100) // 实验ID
+  experimentName    String @db.VarChar(255) // 实验名称
+  variantId         String @db.VarChar(50)  // 变体ID (A/B/C等)
+  variantName       String @db.VarChar(100) // 变体名称
+
+  // 实验参数
+  experimentConfig  Json   @db.JsonB // 实验配置
+  userSegment       String @db.VarChar(50) // 用户分组
+  allocationMethod  String @default("random") @db.VarChar(30)
+
+  // 参与状态
+  status            ABTestStatus @default(ACTIVE)
+  enrolledAt        DateTime     @default(now()) @db.Timestamp(3)
+  exitedAt          DateTime?    @db.Timestamp(3)
+  exitReason        String?      @db.VarChar(100)
+
+  // 效果指标
+  primaryMetric     Json?  @db.JsonB // 主要指标值
+  secondaryMetrics  Json?  @db.JsonB // 次要指标
+  conversionEvents  Int    @default(0) @db.SmallInt // 转化事件数
+  engagementScore   Float? @db.DoublePrecision
+
+  // 数据质量
+  sampleSize        Int     @default(0) // 样本数量
+  dataQuality       Float   @default(1.0) @db.DoublePrecision
+  hasValidData      Boolean @default(true)
+
+  @@unique([userId, experimentId])
+  @@index([experimentId, variantId])
+  @@index([status, enrolledAt])
+  @@map("ab_test_participation")
+}
+
+// 新增枚举类型
+enum RecommendationStatus {
+  PENDING     // 待响应
+  ACCEPTED    // 已接受
+  DECLINED    // 已拒绝
+  COMPLETED   // 已完成
+  EXPIRED     // 已过期
+}
+
+enum LearningPathStatus {
+  ACTIVE      // 进行中
+  PAUSED      // 已暂停
+  COMPLETED   // 已完成
+  CANCELLED   // 已取消
+  ARCHIVED    // 已归档
+}
+
+enum ABTestStatus {
+  ACTIVE      // 进行中
+  COMPLETED   // 已完成
+  EXITED      // 已退出
+  EXCLUDED    // 被排除
 }

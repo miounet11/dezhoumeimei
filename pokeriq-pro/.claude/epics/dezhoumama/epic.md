@@ -1,11 +1,13 @@
 ---
 name: dezhoumama
-status: open
+status: completed
 created: 2025-08-26T03:55:17Z
-updated: 2025-08-26T03:55:17Z
-last_sync: 2025-08-26T09:23:19Z
+updated: 2025-08-27T02:52:01Z
+completed: 2025-08-27T02:52:01Z
+last_sync: 2025-08-27T02:52:01Z
 github: https://github.com/anthropics/pokeriq-pro/issues/2
 imported: true
+progress: 87.5
 ---
 
 # Epic: dezhoumama

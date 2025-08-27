@@ -17,7 +17,8 @@ import {
   Download,
   Share2,
   Eye,
-  EyeOff
+  EyeOff,
+  User
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -107,7 +108,7 @@ export default function DashboardLayout({
     showNotifications: true,
     autoRefresh: true,
     refreshInterval: 30000, // 30 seconds
-    visibleSections: ['overview', 'analytics', 'progress', 'recommendations', 'social'],
+    visibleSections: ['overview', 'personalization', 'analytics', 'progress', 'recommendations', 'social'],
     theme: 'auto'
   });
   const [activeSection, setActiveSection] = useState('overview');
@@ -119,6 +120,13 @@ export default function DashboardLayout({
       icon: LayoutDashboard,
       path: '/dashboard',
       description: 'General dashboard overview'
+    },
+    {
+      id: 'personalization',
+      title: 'Personalization',
+      icon: User,
+      path: '/personalization',
+      description: 'AI-powered personalized learning'
     },
     {
       id: 'analytics',
